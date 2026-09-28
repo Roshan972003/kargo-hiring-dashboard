@@ -92,3 +92,13 @@ def update_candidate(candidate_id, patch):
             conn.commit()
 
     return updated
+
+
+def delete_candidate(candidate_id):
+    _ensure_table()
+    with _get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM candidates WHERE id = %s", (candidate_id,))
+            deleted = cur.rowcount > 0
+        conn.commit()
+    return deleted

@@ -26,12 +26,12 @@
 
     <section class="panel upload-panel">
       <div class="panel-title-row">
-        <h2><span class="step-dot">1</span>Upload candidate</h2>
+        <h2><span class="step-dot">1</span>Upload candidates</h2>
       </div>
 
       <form id="upload-form">
         <label id="dropzone" for="resume-input" class="dropzone">
-          <input id="resume-input" type="file" name="file" accept=".pdf,.docx,.txt" required hidden />
+          <input id="resume-input" type="file" name="file" accept=".pdf,.docx,.txt" required multiple hidden />
           <div class="dropzone-icon">
             <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
               <path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
@@ -39,8 +39,8 @@
               <path d="M12 4v12" />
             </svg>
           </div>
-          <p class="dropzone-title" id="dropzone-title">Drop a resume here, or click to browse</p>
-          <p class="dropzone-hint">PDF, DOCX, or TXT · up to 4MB</p>
+          <p class="dropzone-title" id="dropzone-title">Drop resumes here, or click to browse</p>
+          <p class="dropzone-hint">PDF, DOCX, or TXT · up to 4MB each · select multiple</p>
         </label>
 
         <div class="form-row">
@@ -56,6 +56,12 @@
           <button type="submit" id="upload-btn" class="btn-primary">
             <span id="upload-btn-label">Score candidate</span>
           </button>
+        </div>
+        <div id="upload-progress" class="upload-progress hidden">
+          <div class="upload-progress-bar">
+            <div class="upload-progress-fill" id="upload-progress-fill"></div>
+          </div>
+          <p class="muted" id="upload-progress-label"></p>
         </div>
       </form>
       <p id="upload-error" class="error hidden"></p>
@@ -108,6 +114,7 @@
               <th>Gate</th>
               <th>Decision</th>
               <th>Email</th>
+              <th></th>
             </tr>
           </thead>
           <tbody id="candidates-body"></tbody>

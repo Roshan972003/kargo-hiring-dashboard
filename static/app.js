@@ -23,6 +23,11 @@ const dropzone = document.getElementById("dropzone");
 const dropzoneTitle = document.getElementById("dropzone-title");
 const roleInput = document.getElementById("role-input");
 const roleSegmented = document.getElementById("role-segmented");
+const uploadProgress = document.getElementById("upload-progress");
+const uploadProgressFill = document.getElementById("upload-progress-fill");
+const uploadProgressLabel = document.getElementById("upload-progress-label");
+
+const DEFAULT_DROPZONE_TEXT = "Drop resumes here, or click to browse";
 
 const statsRow = document.getElementById("stats-row");
 const statTotal = document.getElementById("stat-total");
@@ -54,15 +59,26 @@ roleSegmented.addEventListener("click", (e) => {
 // --- Dropzone ---
 
 resumeInput.addEventListener("change", () => {
-  const file = resumeInput.files[0];
-  if (file) {
-    dropzoneTitle.textContent = file.name;
-    dropzone.classList.add("has-file");
-  } else {
-    dropzoneTitle.textContent = "Drop a resume here, or click to browse";
-    dropzone.classList.remove("has-file");
-  }
+  updateDropzoneLabel();
 });
+
+function updateDropzoneLabel() {
+  const files = resumeInput.files;
+  if (!files || files.length === 0) {
+    dropzoneTitle.textContent = DEFAULT_DROPZONE_TEXT;
+    dropzone.classList.remove("has-file");
+    uploadBtnLabel.textContent = "Score candidate";
+    return;
+  }
+  if (files.length === 1) {
+    dropzoneTitle.textContent = files[0].name;
+    uploadBtnLabel.textContent = "Score candidate";
+  } else {
+    dropzoneTitle.textContent = `${files.length} resumes selected`;
+    uploadBtnLabel.textContent = `Score ${files.length} candidates`;
+  }
+  dropzone.classList.add("has-file");
+}
 
 ["dragover", "dragenter"].forEach((evt) =>
   dropzone.addEventListener(evt, (e) => {
@@ -78,8 +94,7 @@ resumeInput.addEventListener("change", () => {
 dropzone.addEventListener("drop", (e) => {
   e.preventDefault();
   dropzone.classList.remove("drag-over");
-  const file = e.dataTransfer.files[0];
-  if (file) {
+  if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
     resumeInput.files = e.dataTransfer.files;
     resumeInput.dispatchEvent(new Event("change"));
   }
@@ -149,10 +164,42 @@ function renderTable() {
       <td>${gateBadge(c.gate.status)}</td>
       <td><span class="badge ${DECISION_BADGE_CLASS[c.decision]}" title="${escapeHtml(META.decision_labels[c.decision])}">${DECISION_SHORT_LABELS[c.decision]}</span></td>
       <td class="muted">${c.email_sent ? "Sent" : "Draft"}</td>
+      <td>
+        <button class="row-delete-btn" title="Delete candidate" aria-label="Delete candidate">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 6h18" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+          </svg>
+        </button>
+      </td>
     `;
     tr.addEventListener("click", () => openDetail(c.id));
+    tr.querySelector(".row-delete-btn").addEventListener("click", (e) => {
+      e.stopPropagation();
+      deleteCandidate(c.id);
+    });
     candidatesBody.appendChild(tr);
   });
+}
+
+async function deleteCandidate(id) {
+  const c = candidates.find((x) => x.id === id);
+  if (!c) return;
+  if (!confirm(`Delete ${c.name} from the ranked candidates? This can't be undone.`)) return;
+
+  try {
+    const res = await fetch(`/api/candidates/${id}`, { method: "DELETE" });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Delete failed.");
+
+    candidates = candidates.filter((x) => x.id !== id);
+    renderTable();
+    if (!overlay.classList.contains("hidden") && detailPanel.dataset.candidateId === id) {
+      closeDetail();
+    }
+  } catch (err) {
+    alert(err.message);
+  }
 }
 
 function gateBadge(status) {
@@ -170,38 +217,70 @@ function escapeHtml(str) {
 
 uploadForm.addEventListener("submit", async (e) => {
   e.preventDefault();
-  const file = resumeInput.files[0];
-  if (!file) return;
+  const files = Array.from(resumeInput.files || []);
+  if (files.length === 0) return;
 
   uploadBtn.disabled = true;
-  uploadBtnLabel.textContent = "Scoring…";
   uploadError.classList.add("hidden");
 
-  try {
-    const form = new FormData();
-    form.append("file", file);
-    form.append("role", roleInput.value);
-    const res = await fetch("/api/evaluate", { method: "POST", body: form });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Evaluation failed.");
+  const role = roleInput.value;
+  const errors = [];
+  let lastSucceededId = null;
 
-    candidates.push(data.candidate);
-    candidates.sort((a, b) => b.composite_score - a.composite_score);
-    renderTable();
-    openDetail(data.candidate.id);
-
-    uploadForm.reset();
-    dropzoneTitle.textContent = "Drop a resume here, or click to browse";
-    dropzone.classList.remove("has-file");
-    roleSegmented.querySelectorAll(".segmented-option").forEach((b, i) => b.classList.toggle("active", i === 0));
-    roleInput.value = "PM";
-  } catch (err) {
-    uploadError.textContent = err.message;
-    uploadError.classList.remove("hidden");
-  } finally {
-    uploadBtn.disabled = false;
-    uploadBtnLabel.textContent = "Score candidate";
+  if (files.length > 1) {
+    uploadProgress.classList.remove("hidden");
+    uploadProgressFill.style.width = "0%";
   }
+
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    uploadBtnLabel.textContent =
+      files.length > 1 ? `Scoring ${i + 1} of ${files.length}…` : "Scoring…";
+    if (files.length > 1) {
+      uploadProgressLabel.textContent = `${file.name} (${i + 1}/${files.length})`;
+      uploadProgressFill.style.width = `${(i / files.length) * 100}%`;
+    }
+
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("role", role);
+      const res = await fetch("/api/evaluate", { method: "POST", body: form });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Evaluation failed.");
+
+      candidates.push(data.candidate);
+      lastSucceededId = data.candidate.id;
+      candidates.sort((a, b) => b.composite_score - a.composite_score);
+      renderTable();
+    } catch (err) {
+      errors.push(`${file.name}: ${err.message}`);
+    }
+
+    if (files.length > 1) {
+      uploadProgressFill.style.width = `${((i + 1) / files.length) * 100}%`;
+    }
+  }
+
+  if (errors.length > 0) {
+    uploadError.textContent =
+      errors.length === files.length
+        ? `All uploads failed. ${errors[0]}`
+        : `${errors.length} of ${files.length} failed: ${errors.join(" · ")}`;
+    uploadError.classList.remove("hidden");
+  }
+
+  if (lastSucceededId) {
+    openDetail(lastSucceededId);
+  }
+
+  uploadForm.reset();
+  updateDropzoneLabel();
+  roleSegmented.querySelectorAll(".segmented-option").forEach((b, i) => b.classList.toggle("active", i === 0));
+  roleInput.value = "PM";
+  uploadBtn.disabled = false;
+  uploadBtnLabel.textContent = "Score candidate";
+  uploadProgress.classList.add("hidden");
 });
 
 // --- Detail panel ---
@@ -209,11 +288,13 @@ uploadForm.addEventListener("submit", async (e) => {
 function openDetail(id) {
   const c = candidates.find((x) => x.id === id);
   if (!c) return;
+  detailPanel.dataset.candidateId = id;
   detailPanel.innerHTML = renderDetail(c);
   overlay.classList.remove("hidden");
 
   detailPanel.querySelector(".close-btn").addEventListener("click", closeDetail);
   detailPanel.querySelector(".send-btn").addEventListener("click", () => sendEmail(c.id));
+  detailPanel.querySelector(".detail-delete-btn").addEventListener("click", () => deleteCandidate(c.id));
 }
 
 function closeDetail() {
@@ -257,7 +338,15 @@ function renderDetail(c) {
           <p>${c.role === "PM" ? "Product Manager" : "Senior Product Manager"} · ${escapeHtml(c.file_name)}</p>
         </div>
       </div>
-      <button class="close-btn">✕</button>
+      <div style="display:flex;align-items:center;gap:8px">
+        <button class="row-delete-btn detail-delete-btn" title="Delete candidate" aria-label="Delete candidate">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 6h18" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+          </svg>
+        </button>
+        <button class="close-btn">✕</button>
+      </div>
     </div>
 
     <div class="stat-grid">
