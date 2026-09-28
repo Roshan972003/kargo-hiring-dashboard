@@ -15,11 +15,13 @@ from rubric import DECISION_LABELS, PILLAR_IDS, PILLAR_NAMES, WEIGHTS, compute_c
 from store import add_candidate, get_all_candidates, update_candidate
 
 PORT = int(os.environ.get("PORT", 5002))
-MAX_FILE_SIZE = 20 * 1024 * 1024  # 20MB
+# Vercel's Serverless Functions cap request bodies at ~4.5MB regardless of this
+# setting, so we stay under that rather than advertise a limit we can't honor.
+MAX_FILE_SIZE = 4 * 1024 * 1024  # 4MB
 ALLOWED_EXTENSIONS = {"pdf", "docx", "txt"}
 
 app = Flask(__name__)
-app.config["MAX_CONTENT_LENGTH"] = MAX_FILE_SIZE + 2 * 1024 * 1024
+app.config["MAX_CONTENT_LENGTH"] = MAX_FILE_SIZE + 256 * 1024
 
 
 @app.route("/")
@@ -50,7 +52,7 @@ def evaluate():
 
     file_bytes = file.read()
     if len(file_bytes) > MAX_FILE_SIZE:
-        return jsonify(error="File is too large. Maximum size is 20MB."), 400
+        return jsonify(error="File is too large. Maximum size is 4MB."), 400
     if len(file_bytes) == 0:
         return jsonify(error="The uploaded file is empty."), 400
 
@@ -153,7 +155,7 @@ def send_email():
 
 @app.errorhandler(413)
 def too_large(_exc):
-    return jsonify(error="File is too large. Maximum size is 20MB."), 413
+    return jsonify(error="File is too large. Maximum size is 4MB."), 413
 
 
 @app.errorhandler(500)

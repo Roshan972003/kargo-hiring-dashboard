@@ -43,12 +43,38 @@ Then open http://localhost:5002. Or use `./run.sh` once `venv` is set up.
 
 - `GEMINI_API_KEY` — required. Get one from Google AI Studio.
 - `GEMINI_MODEL` — optional, defaults to `gemini-3.8-flash`.
-- `RESEND_API_KEY` — required to send email. Get one from resend.com.
-- `RESEND_FROM_EMAIL` — required. Must be a verified sender/domain in your Resend
-  account, e.g. `"Kargo Hiring <hiring@yourdomain.com>"`.
 - `DATABASE_URL` — required. A Neon Postgres connection string
   (`postgresql://user:pass@host/db?sslmode=require`). The `candidates` table is
   created automatically on first use.
+- `RESEND_API_KEY` / `RESEND_FROM_EMAIL` — optional for now. Without them, everything
+  works except clicking Send, which returns a clear error instead of sending. Add them
+  later (a Resend API key + a verified sender, e.g. `"Kargo Hiring <hiring@yourdomain.com>"`)
+  to enable real outreach.
+
+## Deploying on Vercel
+
+The app is set up to deploy as-is:
+
+- `api/index.py` exposes the Flask `app` as the WSGI entrypoint Vercel's Python
+  runtime looks for.
+- `vercel.json` routes every request to that function and raises its timeout to 60s
+  (resume scoring makes two sequential Gemini calls, which can take a few seconds).
+- Candidate storage is already Neon Postgres, so there's no local filesystem
+  dependency that would break in a serverless environment.
+- Upload size is capped at 4MB (`app.py`) to stay under Vercel's ~4.5MB request body
+  limit for Serverless Functions.
+
+Steps:
+
+1. Push this repo to GitHub (already done if you're reading this from there).
+2. In the Vercel dashboard: **Add New → Project**, import the repo. Vercel will
+   detect `vercel.json` and use the Python builder automatically — no framework
+   preset needed.
+3. Add environment variables under **Project Settings → Environment Variables**:
+   `GEMINI_API_KEY`, `GEMINI_MODEL` (optional), `DATABASE_URL`, and later
+   `RESEND_API_KEY` / `RESEND_FROM_EMAIL` once you're ready to send real email.
+4. Deploy. Your Neon database is already cloud-hosted, so the same `DATABASE_URL`
+   works in both local dev and the deployed app — candidates persist across both.
 
 ## Notes / limitations
 
@@ -60,3 +86,8 @@ Then open http://localhost:5002. Or use `./run.sh` once `venv` is set up.
   model never does that arithmetic.
 - Free-tier Gemini API keys have daily/per-minute quotas; if `/api/evaluate` starts
   returning 429s, either wait for the quota to reset or use a paid key.
+- Resend isn't configured yet — sending is stubbed out until `RESEND_API_KEY` and
+  `RESEND_FROM_EMAIL` are added, everything else (scoring, ranking, drafts) works
+  without it.
+- Resume uploads are capped at 4MB to fit Vercel's Serverless Function request body
+  limit; large scanned PDFs may need to be compressed first.
