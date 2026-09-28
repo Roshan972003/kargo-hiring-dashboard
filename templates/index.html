@@ -86,11 +86,31 @@
       </div>
     </section>
 
+    <section id="charts-row" class="charts-row hidden">
+      <div class="panel chart-panel">
+        <h2 class="chart-title">Score comparison</h2>
+        <div id="score-chart" class="bar-chart"></div>
+      </div>
+      <div class="panel chart-panel">
+        <h2 class="chart-title">Decision breakdown</h2>
+        <div id="decision-chart" class="bar-chart"></div>
+      </div>
+    </section>
+
     <section class="panel">
       <div class="panel-title-row">
         <h2><span class="step-dot">2</span>Ranked candidates</h2>
         <span id="candidate-count" class="muted"></span>
       </div>
+
+      <div id="toolbar" class="toolbar hidden">
+        <input id="search-input" type="text" class="search-input" placeholder="Search by name or role…" />
+        <div class="toolbar-actions">
+          <button id="export-btn" class="btn-secondary btn-small" type="button">Export CSV</button>
+          <button id="delete-all-btn" class="btn-danger btn-small" type="button">Delete all</button>
+        </div>
+      </div>
+
       <div id="candidates-wrap">
         <div id="loading-state" class="empty-state">
           <p class="muted">Loading candidates…</p>
@@ -104,6 +124,9 @@
           </div>
           <p>No candidates yet</p>
           <p class="muted">Upload a resume above to get started.</p>
+        </div>
+        <div id="no-results" class="empty-state hidden">
+          <p>No candidates match "<span id="no-results-query"></span>"</p>
         </div>
         <table id="candidates-table" class="hidden">
           <thead>
@@ -126,6 +149,19 @@
   <div id="overlay" class="overlay hidden">
     <div id="detail-panel" class="detail-panel"></div>
   </div>
+
+  <div id="confirm-overlay" class="overlay hidden">
+    <div class="confirm-modal">
+      <p id="confirm-title" class="confirm-title"></p>
+      <p id="confirm-body" class="confirm-body"></p>
+      <div class="confirm-actions">
+        <button id="confirm-cancel" class="btn-secondary" type="button">Cancel</button>
+        <button id="confirm-ok" class="btn-danger" type="button">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
 
   <script id="rubric-meta" type="application/json">{{ meta | tojson }}</script>
   <script src="{{ url_for('static', filename='app.js') }}"></script>

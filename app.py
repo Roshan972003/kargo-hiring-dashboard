@@ -12,7 +12,7 @@ from ai import AIError, draft_email, score_candidate
 from parsing import ParseError, extract_text
 from redact import redact_resume
 from rubric import DECISION_LABELS, PILLAR_IDS, PILLAR_NAMES, WEIGHTS, compute_composite, decide_band
-from store import add_candidate, delete_candidate, get_all_candidates, update_candidate
+from store import add_candidate, delete_all_candidates, delete_candidate, get_all_candidates, update_candidate
 
 PORT = int(os.environ.get("PORT", 5002))
 # Vercel's Serverless Functions cap request bodies at ~4.5MB regardless of this
@@ -108,11 +108,17 @@ def evaluate():
     return jsonify(candidate=candidate)
 
 
-@app.route("/api/candidates")
+@app.route("/api/candidates", methods=["GET"])
 def candidates():
     all_candidates = get_all_candidates()
     ranked = sorted(all_candidates, key=lambda c: c["composite_score"], reverse=True)
     return jsonify(candidates=ranked)
+
+
+@app.route("/api/candidates", methods=["DELETE"])
+def remove_all_candidates():
+    count = delete_all_candidates()
+    return jsonify(deleted=count)
 
 
 @app.route("/api/candidates/<candidate_id>", methods=["DELETE"])

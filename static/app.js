@@ -14,6 +14,15 @@ const DECISION_SHORT_LABELS = {
   fast_track: "Fast-track",
 };
 
+// Fixed colors for decision bands, in worst -> best order. Kept in sync with
+// the .badge-red/-amber/-green/-blue classes used elsewhere.
+const DECISION_COLORS = {
+  do_not_proceed: "#f87171",
+  proceed_if_ambiguity_strong: "#fbbf24",
+  strong_proceed: "#34d399",
+  fast_track: "#4f8ef7",
+};
+
 const uploadForm = document.getElementById("upload-form");
 const uploadBtn = document.getElementById("upload-btn");
 const uploadBtnLabel = document.getElementById("upload-btn-label");
@@ -35,6 +44,7 @@ const statFastTrack = document.getElementById("stat-fasttrack");
 const statStrong = document.getElementById("stat-strong");
 const statFlagged = document.getElementById("stat-flagged");
 
+const candidatesWrap = document.getElementById("candidates-wrap");
 const candidatesBody = document.getElementById("candidates-body");
 const candidatesTable = document.getElementById("candidates-table");
 const emptyState = document.getElementById("empty-state");
@@ -44,7 +54,63 @@ const candidateCount = document.getElementById("candidate-count");
 const overlay = document.getElementById("overlay");
 const detailPanel = document.getElementById("detail-panel");
 
+const toolbar = document.getElementById("toolbar");
+const searchInput = document.getElementById("search-input");
+const noResults = document.getElementById("no-results");
+const noResultsQuery = document.getElementById("no-results-query");
+const exportBtn = document.getElementById("export-btn");
+const deleteAllBtn = document.getElementById("delete-all-btn");
+
+const chartsRow = document.getElementById("charts-row");
+const scoreChart = document.getElementById("score-chart");
+const decisionChart = document.getElementById("decision-chart");
+
+const confirmOverlay = document.getElementById("confirm-overlay");
+const confirmTitle = document.getElementById("confirm-title");
+const confirmBody = document.getElementById("confirm-body");
+const confirmCancel = document.getElementById("confirm-cancel");
+const confirmOk = document.getElementById("confirm-ok");
+const toast = document.getElementById("toast");
+
 let candidates = [];
+let toastTimer = null;
+
+// --- Confirm modal / toast (replace native confirm()/alert()) ---
+
+function confirmDialog(title, body) {
+  confirmTitle.textContent = title;
+  confirmBody.textContent = body;
+  confirmOverlay.classList.remove("hidden");
+
+  return new Promise((resolve) => {
+    function cleanup(result) {
+      confirmOverlay.classList.add("hidden");
+      confirmOk.removeEventListener("click", onOk);
+      confirmCancel.removeEventListener("click", onCancel);
+      confirmOverlay.removeEventListener("click", onOverlay);
+      resolve(result);
+    }
+    function onOk() {
+      cleanup(true);
+    }
+    function onCancel() {
+      cleanup(false);
+    }
+    function onOverlay(e) {
+      if (e.target === confirmOverlay) cleanup(false);
+    }
+    confirmOk.addEventListener("click", onOk);
+    confirmCancel.addEventListener("click", onCancel);
+    confirmOverlay.addEventListener("click", onOverlay);
+  });
+}
+
+function showToast(message) {
+  toast.textContent = message;
+  toast.classList.remove("hidden");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.add("hidden"), 3500);
+}
 
 // --- Role segmented control ---
 
@@ -118,6 +184,15 @@ function initials(name) {
   return ((parts[0]?.[0] || "") + (parts[1]?.[0] || "")).toUpperCase();
 }
 
+function experienceLine(c) {
+  const yrs = c.extracted?.years_experience;
+  const role = c.extracted?.current_role;
+  const parts = [];
+  if (typeof yrs === "number") parts.push(`${yrs} yr${yrs === 1 ? "" : "s"}`);
+  if (role) parts.push(role);
+  return parts.join(" · ");
+}
+
 function renderStats() {
   if (candidates.length === 0) {
     statsRow.classList.add("hidden");
@@ -130,28 +205,59 @@ function renderStats() {
   statFlagged.textContent = candidates.filter((c) => c.gate.status === "flag").length;
 }
 
+function getVisibleCandidates() {
+  const q = searchInput.value.trim().toLowerCase();
+  if (!q) return candidates;
+  return candidates.filter(
+    (c) =>
+      c.name.toLowerCase().includes(q) ||
+      c.role.toLowerCase().includes(q) ||
+      (c.extracted?.current_role || "").toLowerCase().includes(q)
+  );
+}
+
 function renderTable() {
   candidateCount.textContent = candidates.length ? `${candidates.length} scored` : "";
   renderStats();
+  renderCharts();
 
   if (candidates.length === 0) {
     emptyState.classList.remove("hidden");
+    noResults.classList.add("hidden");
     candidatesTable.classList.add("hidden");
+    toolbar.classList.add("hidden");
+    chartsRow.classList.add("hidden");
     return;
   }
   emptyState.classList.add("hidden");
+  toolbar.classList.remove("hidden");
+  chartsRow.classList.remove("hidden");
+
+  const visible = getVisibleCandidates();
+
+  if (visible.length === 0) {
+    candidatesTable.classList.add("hidden");
+    noResults.classList.remove("hidden");
+    noResultsQuery.textContent = searchInput.value.trim();
+    return;
+  }
+  noResults.classList.add("hidden");
   candidatesTable.classList.remove("hidden");
 
   candidatesBody.innerHTML = "";
-  candidates.forEach((c, i) => {
+  visible.forEach((c, i) => {
     const tr = document.createElement("tr");
     const pct = Math.min(100, Math.max(0, (c.composite_score / 4) * 100));
+    const exp = experienceLine(c);
     tr.innerHTML = `
       <td>
         <div class="candidate-cell">
           <span class="rank">#${i + 1}</span>
           <span class="avatar">${initials(c.name)}</span>
-          <span class="candidate-name">${escapeHtml(c.name)}</span>
+          <div class="candidate-text">
+            <span class="candidate-name" title="${escapeHtml(c.name)}">${escapeHtml(c.name)}</span>
+            ${exp ? `<span class="candidate-sub" title="${escapeHtml(exp)}">${escapeHtml(exp)}</span>` : ""}
+          </div>
         </div>
       </td>
       <td class="muted">${c.role}</td>
@@ -180,12 +286,19 @@ function renderTable() {
     });
     candidatesBody.appendChild(tr);
   });
+  candidatesWrap.scrollLeft = 0;
 }
+
+searchInput.addEventListener("input", () => renderTable());
 
 async function deleteCandidate(id) {
   const c = candidates.find((x) => x.id === id);
   if (!c) return;
-  if (!confirm(`Delete ${c.name} from the ranked candidates? This can't be undone.`)) return;
+  const ok = await confirmDialog(
+    "Delete candidate?",
+    `Delete ${c.name} from the ranked candidates? This can't be undone.`
+  );
+  if (!ok) return;
 
   try {
     const res = await fetch(`/api/candidates/${id}`, { method: "DELETE" });
@@ -197,9 +310,121 @@ async function deleteCandidate(id) {
     if (!overlay.classList.contains("hidden") && detailPanel.dataset.candidateId === id) {
       closeDetail();
     }
+    showToast(`Deleted ${c.name}.`);
   } catch (err) {
-    alert(err.message);
+    showToast(err.message);
   }
+}
+
+deleteAllBtn.addEventListener("click", async () => {
+  if (candidates.length === 0) return;
+  const ok = await confirmDialog(
+    "Delete all candidates?",
+    `This permanently deletes all ${candidates.length} ranked candidates. This can't be undone.`
+  );
+  if (!ok) return;
+
+  try {
+    const res = await fetch("/api/candidates", { method: "DELETE" });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Delete failed.");
+
+    candidates = [];
+    renderTable();
+    closeDetail();
+    showToast("All candidates deleted.");
+  } catch (err) {
+    showToast(err.message);
+  }
+});
+
+// --- CSV export ---
+
+function csvEscape(value) {
+  const s = String(value ?? "");
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+exportBtn.addEventListener("click", () => {
+  const rows = getVisibleCandidates();
+  if (rows.length === 0) return;
+
+  const header = [
+    "Name",
+    "Role",
+    "Composite score",
+    "Decision",
+    "Gate",
+    "Years experience",
+    "Current role",
+    "Email",
+    "Email sent",
+  ];
+  const lines = [header.map(csvEscape).join(",")];
+  rows.forEach((c) => {
+    lines.push(
+      [
+        c.name,
+        c.role,
+        c.composite_score.toFixed(2),
+        META.decision_labels[c.decision],
+        c.gate.status,
+        c.extracted?.years_experience ?? "",
+        c.extracted?.current_role ?? "",
+        c.email ?? "",
+        c.email_sent ? "yes" : "no",
+      ]
+        .map(csvEscape)
+        .join(",")
+    );
+  });
+
+  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `kargo-candidates-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+});
+
+// --- Charts ---
+
+function renderBarRow(label, value, max, color, valueText) {
+  const pct = max > 0 ? Math.max((value / max) * 100, value > 0 ? 3 : 0) : 0;
+  return `
+    <div class="bar-chart-row">
+      <span class="bar-chart-label" title="${escapeHtml(label)}">${escapeHtml(label)}</span>
+      <span class="bar-chart-track"><span class="bar-chart-fill" style="width:${pct}%;background:${color}"></span></span>
+      <span class="bar-chart-value">${escapeHtml(valueText)}</span>
+    </div>
+  `;
+}
+
+function renderCharts() {
+  if (candidates.length === 0) return;
+
+  // Score comparison: one bar per candidate, sorted by composite score.
+  // Capped so the chart stays readable once the list grows large.
+  const SCORE_CHART_CAP = 12;
+  const ranked = [...candidates].sort((a, b) => b.composite_score - a.composite_score);
+  const shown = ranked.slice(0, SCORE_CHART_CAP);
+  scoreChart.innerHTML = shown
+    .map((c) => renderBarRow(c.name, c.composite_score, 4, "var(--accent)", c.composite_score.toFixed(2)))
+    .join("");
+  if (ranked.length > SCORE_CHART_CAP) {
+    scoreChart.innerHTML += `<p class="bar-chart-empty">+ ${ranked.length - SCORE_CHART_CAP} more — see the table below</p>`;
+  }
+
+  // Decision breakdown: fixed worst -> best order, count per band.
+  const order = ["do_not_proceed", "proceed_if_ambiguity_strong", "strong_proceed", "fast_track"];
+  const counts = order.map((d) => candidates.filter((c) => c.decision === d).length);
+  const maxCount = Math.max(...counts, 1);
+  decisionChart.innerHTML = order
+    .map((d, i) => renderBarRow(DECISION_SHORT_LABELS[d], counts[i], maxCount, DECISION_COLORS[d], String(counts[i])))
+    .join("");
 }
 
 function gateBadge(status) {
@@ -307,7 +532,12 @@ overlay.addEventListener("click", (e) => {
 });
 
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && !overlay.classList.contains("hidden")) closeDetail();
+  if (e.key !== "Escape") return;
+  if (!confirmOverlay.classList.contains("hidden")) {
+    confirmCancel.click();
+  } else if (!overlay.classList.contains("hidden")) {
+    closeDetail();
+  }
 });
 
 function renderDetail(c) {
@@ -321,6 +551,7 @@ function renderDetail(c) {
             <span class="pillar-name">${META.pillar_names[p]}</span>
             <span class="pillar-score">${s.score}/4 · ${Math.round(weights[p] * 100)}%</span>
           </div>
+          <div class="pillar-bar-track"><div class="pillar-bar-fill" style="width:${(s.score / 4) * 100}%"></div></div>
           <p>${escapeHtml(s.rationale)}</p>
         </div>
       `;

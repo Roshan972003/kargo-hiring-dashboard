@@ -102,3 +102,13 @@ def delete_candidate(candidate_id):
             deleted = cur.rowcount > 0
         conn.commit()
     return deleted
+
+
+def delete_all_candidates():
+    _ensure_table()
+    with _get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM candidates")
+            count = cur.rowcount
+        conn.commit()
+    return count
