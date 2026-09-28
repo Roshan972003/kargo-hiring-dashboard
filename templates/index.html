@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kargo Hiring Dashboard</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+  <main class="page">
+    <header class="page-header">
+      <h1>Kargo Hiring Dashboard</h1>
+      <p>Upload a resume, score it against the PM / Senior PM rubric, and send interview outreach — end to end.</p>
+    </header>
+
+    <section class="panel">
+      <h2>Upload candidate</h2>
+      <form id="upload-form" class="upload-form">
+        <div class="field">
+          <label for="resume-input">Resume (PDF, DOCX, or TXT)</label>
+          <input id="resume-input" type="file" name="file" accept=".pdf,.docx,.txt" required />
+        </div>
+        <div class="field">
+          <label for="role-select">Applied role</label>
+          <select id="role-select" name="role">
+            <option value="PM">Product Manager</option>
+            <option value="SPM">Senior Product Manager</option>
+          </select>
+        </div>
+        <button type="submit" id="upload-btn">Score candidate</button>
+      </form>
+      <p id="upload-error" class="error hidden"></p>
+    </section>
+
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Ranked candidates</h2>
+        <span id="candidate-count" class="muted"></span>
+      </div>
+      <div id="candidates-wrap">
+        <p id="empty-state" class="muted padded">No candidates yet — upload a resume above to get started.</p>
+        <table id="candidates-table" class="hidden">
+          <thead>
+            <tr>
+              <th>Candidate</th>
+              <th>Role</th>
+              <th>Composite</th>
+              <th>Gate</th>
+              <th>Decision</th>
+              <th>Email</th>
+            </tr>
+          </thead>
+          <tbody id="candidates-body"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <div id="overlay" class="overlay hidden">
+    <div id="detail-panel" class="detail-panel"></div>
+  </div>
+
+  <script id="rubric-meta" type="application/json">{{ meta | tojson }}</script>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
