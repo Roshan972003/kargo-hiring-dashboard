@@ -6,13 +6,20 @@ from dotenv import load_dotenv
 
 load_dotenv(override=True)
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, abort, jsonify, render_template, request
 
 from ai import AIError, draft_email, score_candidate
 from parsing import ParseError, extract_text
 from redact import redact_resume
 from rubric import DECISION_LABELS, PILLAR_IDS, PILLAR_NAMES, WEIGHTS, compute_composite, decide_band
-from store import add_candidate, delete_all_candidates, delete_candidate, get_all_candidates, update_candidate
+from store import (
+    add_candidate,
+    delete_all_candidates,
+    delete_candidate,
+    get_all_candidates,
+    get_candidate,
+    update_candidate,
+)
 
 PORT = int(os.environ.get("PORT", 5002))
 # Vercel's Serverless Functions cap request bodies at ~4.5MB regardless of this
@@ -24,15 +31,28 @@ app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = MAX_FILE_SIZE + 256 * 1024
 
 
-@app.route("/")
-def index():
-    meta = {
+def _meta():
+    return {
         "pillar_ids": PILLAR_IDS,
         "pillar_names": PILLAR_NAMES,
         "weights": WEIGHTS,
         "decision_labels": DECISION_LABELS,
     }
-    return render_template("index.html", meta=meta)
+
+
+@app.route("/")
+def index():
+    return render_template("index.html", meta=_meta())
+
+
+@app.route("/candidate/<candidate_id>")
+def candidate_page(candidate_id):
+    candidate = get_candidate(candidate_id)
+    if candidate is None:
+        abort(404)
+    parts = candidate["name"].split()
+    initials = ((parts[0][0] if parts else "") + (parts[1][0] if len(parts) > 1 else "")).upper()
+    return render_template("candidate.html", candidate=candidate, meta=_meta(), initials=initials)
 
 
 @app.route("/api/evaluate", methods=["POST"])
@@ -165,6 +185,13 @@ def send_email():
         return jsonify(error="Candidate not found."), 404
 
     return jsonify(candidate=updated)
+
+
+@app.errorhandler(404)
+def not_found(_exc):
+    if request.path.startswith("/api/"):
+        return jsonify(error="Not found."), 404
+    return render_template("404.html"), 404
 
 
 @app.errorhandler(413)

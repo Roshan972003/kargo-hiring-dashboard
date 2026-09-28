@@ -51,6 +51,15 @@ def get_all_candidates():
     return [row["data"] for row in rows]
 
 
+def get_candidate(candidate_id):
+    _ensure_table()
+    with _get_connection() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("SELECT data FROM candidates WHERE id = %s", (candidate_id,))
+            row = cur.fetchone()
+    return row["data"] if row else None
+
+
 def add_candidate(candidate):
     _ensure_table()
     with _get_connection() as conn:

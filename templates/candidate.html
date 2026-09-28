@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{ candidate.name }} — Kargo Hiring Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+  <div class="bg-glow"></div>
+
+  <main class="page">
+    <header class="page-header">
+      <div class="brand">
+        <a href="/" class="brand-mark" title="Back to dashboard">K</a>
+        <div>
+          <h1>{{ candidate.name }}</h1>
+          <p>{{ "Product Manager" if candidate.role == "PM" else "Senior Product Manager" }} · {{ candidate.file_name }}</p>
+        </div>
+      </div>
+      <a href="/" class="tag">← All candidates</a>
+    </header>
+
+    <section class="panel">
+      <div class="detail-header-left" style="margin-bottom: 20px;">
+        <span class="avatar" style="width:48px;height:48px;font-size:0.95rem">{{ initials }}</span>
+        <div>
+          <p class="muted" style="margin:0">Candidate ID</p>
+          <p class="muted" style="margin:0;font-family:'JetBrains Mono',monospace;font-size:0.76rem">{{ candidate.id }}</p>
+        </div>
+      </div>
+
+      <div class="stat-grid">
+        <div class="stat-box">
+          <p class="label">Composite score</p>
+          <p class="value">{{ "%.2f"|format(candidate.composite_score) }}</p>
+        </div>
+        <div class="stat-box">
+          <p class="label">Decision</p>
+          <p class="value small">{{ meta.decision_labels[candidate.decision] }}</p>
+        </div>
+      </div>
+
+      <div class="gate-box {{ 'flag' if candidate.gate.status == 'flag' else 'clear' }}">
+        <p class="label">Pillar 6 gate — structured-environment risk</p>
+        <p class="gate-status" style="color: {{ 'var(--amber)' if candidate.gate.status == 'flag' else 'var(--green)' }}">
+          {{ "Flag — probe in interview" if candidate.gate.status == "flag" else "Clear" }}
+        </p>
+        <p class="muted">{{ candidate.gate.rationale }}</p>
+      </div>
+
+      <p class="section-title">Extracted profile</p>
+      <div class="stat-grid">
+        <div class="stat-box">
+          <p class="label">Years experience</p>
+          <p class="value small">{{ candidate.extracted.years_experience if candidate.extracted.years_experience is not none else "—" }}</p>
+        </div>
+        <div class="stat-box">
+          <p class="label">Current role</p>
+          <p class="value small">{{ candidate.extracted.current_role or "—" }}</p>
+        </div>
+      </div>
+      {% if candidate.extracted.key_skills %}
+      <div class="brief-block">
+        <p class="brief-title">Key skills</p>
+        <ul>{% for skill in candidate.extracted.key_skills %}<li>{{ skill }}</li>{% endfor %}</ul>
+      </div>
+      {% endif %}
+
+      <p class="section-title">Pillar scores</p>
+      {% for p in meta.pillar_ids %}
+        {% set s = candidate.pillar_scores[p] %}
+        <div class="pillar-box">
+          <div class="pillar-row">
+            <span class="pillar-name">{{ meta.pillar_names[p] }}</span>
+            <span class="pillar-score">{{ s.score }}/4 · {{ (meta.weights[candidate.role][p] * 100) | round | int }}%</span>
+          </div>
+          <div class="pillar-bar-track"><div class="pillar-bar-fill" style="width:{{ s.score / 4 * 100 }}%"></div></div>
+          <p>{{ s.rationale }}</p>
+        </div>
+      {% endfor %}
+
+      <p class="section-title">Interview brief</p>
+      <p class="brief-summary">{{ candidate.interview_brief.summary }}</p>
+      {% if candidate.interview_brief.strengths %}
+      <div class="brief-block">
+        <p class="brief-title">Strengths</p>
+        <ul>{% for i in candidate.interview_brief.strengths %}<li>{{ i }}</li>{% endfor %}</ul>
+      </div>
+      {% endif %}
+      {% if candidate.interview_brief.risks_to_probe %}
+      <div class="brief-block">
+        <p class="brief-title">Risks to probe</p>
+        <ul>{% for i in candidate.interview_brief.risks_to_probe %}<li>{{ i }}</li>{% endfor %}</ul>
+      </div>
+      {% endif %}
+      {% if candidate.interview_brief.suggested_questions %}
+      <div class="brief-block">
+        <p class="brief-title">Suggested questions</p>
+        <ul>{% for i in candidate.interview_brief.suggested_questions %}<li>{{ i }}</li>{% endfor %}</ul>
+      </div>
+      {% endif %}
+
+      <p class="section-title">Draft outreach email</p>
+      <div class="email-form">
+        <div class="email-field">
+          <label>To</label>
+          <input type="email" id="email-to" placeholder="candidate@email.com" value="{{ candidate.email or '' }}" />
+        </div>
+        <div class="email-field">
+          <label>Subject</label>
+          <input type="text" id="email-subject" value="{{ candidate.email_draft.subject }}" />
+        </div>
+        <div class="email-field">
+          <label>Body</label>
+          <textarea id="email-body">{{ candidate.email_draft.body }}</textarea>
+        </div>
+        <div class="send-row">
+          <button class="btn-primary" id="send-email-btn">{{ "Re-send" if candidate.email_sent else "Send email" }}</button>
+          <span class="sent-note {{ 'hidden' if not candidate.email_sent else '' }}" id="sent-note">
+            {% if candidate.email_sent %}Sent {{ candidate.email_sent_at }}{% endif %}
+          </span>
+        </div>
+        <p class="error hidden" id="send-error"></p>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-title-row">
+        <h2>Danger zone</h2>
+      </div>
+      <p class="muted" style="margin: 0 0 14px">Permanently remove this candidate from the ranked dashboard.</p>
+      <button id="delete-candidate-btn" class="btn-danger">Delete candidate</button>
+    </section>
+  </main>
+
+  {% include "_modal.html" %}
+
+  <script>
+    window.CANDIDATE_ID = {{ candidate.id | tojson }};
+  </script>
+  <script src="{{ url_for('static', filename='ui.js') }}"></script>
+  <script src="{{ url_for('static', filename='candidate.js') }}"></script>
+</body>
+</html>

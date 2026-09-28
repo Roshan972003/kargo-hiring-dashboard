@@ -150,20 +150,10 @@
     <div id="detail-panel" class="detail-panel"></div>
   </div>
 
-  <div id="confirm-overlay" class="overlay hidden">
-    <div class="confirm-modal">
-      <p id="confirm-title" class="confirm-title"></p>
-      <p id="confirm-body" class="confirm-body"></p>
-      <div class="confirm-actions">
-        <button id="confirm-cancel" class="btn-secondary" type="button">Cancel</button>
-        <button id="confirm-ok" class="btn-danger" type="button">Delete</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="toast" class="toast hidden"></div>
+  {% include "_modal.html" %}
 
   <script id="rubric-meta" type="application/json">{{ meta | tojson }}</script>
+  <script src="{{ url_for('static', filename='ui.js') }}"></script>
   <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>

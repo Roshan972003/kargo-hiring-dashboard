@@ -79,8 +79,14 @@ body {
   font-weight: 800;
   font-size: 1.15rem;
   color: white;
+  text-decoration: none;
   background: linear-gradient(135deg, var(--accent), var(--accent-2));
   box-shadow: 0 8px 20px -6px rgba(79, 142, 247, 0.55);
+  transition: filter 0.15s;
+}
+
+a.brand-mark:hover {
+  filter: brightness(1.1);
 }
 
 .page-header h1 {
@@ -108,6 +114,13 @@ body {
   border-radius: 999px;
   white-space: nowrap;
   margin-top: 6px;
+  text-decoration: none;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+a.tag:hover {
+  color: var(--text);
+  border-color: var(--panel-border-hover);
 }
 
 /* Panels */
@@ -499,7 +512,14 @@ tbody td {
   gap: 8px;
 }
 
-.row-delete-btn {
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
+}
+
+.row-icon-btn {
   border: none;
   background: transparent;
   color: var(--muted-2);
@@ -511,6 +531,12 @@ tbody td {
   align-items: center;
   justify-content: center;
   transition: color 0.15s, background 0.15s;
+  text-decoration: none;
+}
+
+.row-icon-btn:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .row-delete-btn:hover {

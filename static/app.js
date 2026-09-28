@@ -65,52 +65,7 @@ const chartsRow = document.getElementById("charts-row");
 const scoreChart = document.getElementById("score-chart");
 const decisionChart = document.getElementById("decision-chart");
 
-const confirmOverlay = document.getElementById("confirm-overlay");
-const confirmTitle = document.getElementById("confirm-title");
-const confirmBody = document.getElementById("confirm-body");
-const confirmCancel = document.getElementById("confirm-cancel");
-const confirmOk = document.getElementById("confirm-ok");
-const toast = document.getElementById("toast");
-
 let candidates = [];
-let toastTimer = null;
-
-// --- Confirm modal / toast (replace native confirm()/alert()) ---
-
-function confirmDialog(title, body) {
-  confirmTitle.textContent = title;
-  confirmBody.textContent = body;
-  confirmOverlay.classList.remove("hidden");
-
-  return new Promise((resolve) => {
-    function cleanup(result) {
-      confirmOverlay.classList.add("hidden");
-      confirmOk.removeEventListener("click", onOk);
-      confirmCancel.removeEventListener("click", onCancel);
-      confirmOverlay.removeEventListener("click", onOverlay);
-      resolve(result);
-    }
-    function onOk() {
-      cleanup(true);
-    }
-    function onCancel() {
-      cleanup(false);
-    }
-    function onOverlay(e) {
-      if (e.target === confirmOverlay) cleanup(false);
-    }
-    confirmOk.addEventListener("click", onOk);
-    confirmCancel.addEventListener("click", onCancel);
-    confirmOverlay.addEventListener("click", onOverlay);
-  });
-}
-
-function showToast(message) {
-  toast.textContent = message;
-  toast.classList.remove("hidden");
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toast.classList.add("hidden"), 3500);
-}
 
 // --- Role segmented control ---
 
@@ -270,8 +225,14 @@ function renderTable() {
       <td>${gateBadge(c.gate.status)}</td>
       <td><span class="badge ${DECISION_BADGE_CLASS[c.decision]}" title="${escapeHtml(META.decision_labels[c.decision])}">${DECISION_SHORT_LABELS[c.decision]}</span></td>
       <td class="muted">${c.email_sent ? "Sent" : "Draft"}</td>
-      <td>
-        <button class="row-delete-btn" title="Delete candidate" aria-label="Delete candidate">
+      <td class="row-actions">
+        <a class="row-icon-btn" href="/candidate/${c.id}" target="_blank" rel="noopener" title="Open full page" aria-label="Open full page">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+            <path d="M15 3h6v6" /><path d="M10 14L21 3" />
+          </svg>
+        </a>
+        <button class="row-icon-btn row-delete-btn" title="Delete candidate" aria-label="Delete candidate">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <path d="M3 6h18" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
             <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
@@ -280,6 +241,7 @@ function renderTable() {
       </td>
     `;
     tr.addEventListener("click", () => openDetail(c.id));
+    tr.querySelectorAll(".row-icon-btn").forEach((btn) => btn.addEventListener("click", (e) => e.stopPropagation()));
     tr.querySelector(".row-delete-btn").addEventListener("click", (e) => {
       e.stopPropagation();
       deleteCandidate(c.id);
@@ -532,10 +494,7 @@ overlay.addEventListener("click", (e) => {
 });
 
 document.addEventListener("keydown", (e) => {
-  if (e.key !== "Escape") return;
-  if (!confirmOverlay.classList.contains("hidden")) {
-    confirmCancel.click();
-  } else if (!overlay.classList.contains("hidden")) {
+  if (e.key === "Escape" && confirmOverlay.classList.contains("hidden") && !overlay.classList.contains("hidden")) {
     closeDetail();
   }
 });
@@ -570,7 +529,13 @@ function renderDetail(c) {
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:8px">
-        <button class="row-delete-btn detail-delete-btn" title="Delete candidate" aria-label="Delete candidate">
+        <a class="row-icon-btn" href="/candidate/${c.id}" target="_blank" rel="noopener" title="Open full page" aria-label="Open full page">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+            <path d="M15 3h6v6" /><path d="M10 14L21 3" />
+          </svg>
+        </a>
+        <button class="row-icon-btn row-delete-btn detail-delete-btn" title="Delete candidate" aria-label="Delete candidate">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <path d="M3 6h18" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
             <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
