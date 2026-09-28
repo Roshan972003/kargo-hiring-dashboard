@@ -4,41 +4,101 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Kargo Hiring Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
 </head>
 <body>
+  <div class="bg-glow"></div>
+
   <main class="page">
     <header class="page-header">
-      <h1>Kargo Hiring Dashboard</h1>
-      <p>Upload a resume, score it against the PM / Senior PM rubric, and send interview outreach — end to end.</p>
+      <div class="brand">
+        <div class="brand-mark">K</div>
+        <div>
+          <h1>Kargo Hiring Dashboard</h1>
+          <p>Score resumes against the PM / Senior PM rubric and send interview outreach — end to end.</p>
+        </div>
+      </div>
+      <span class="tag">Series A · Freight-tech</span>
     </header>
 
-    <section class="panel">
-      <h2>Upload candidate</h2>
-      <form id="upload-form" class="upload-form">
-        <div class="field">
-          <label for="resume-input">Resume (PDF, DOCX, or TXT)</label>
-          <input id="resume-input" type="file" name="file" accept=".pdf,.docx,.txt" required />
+    <section class="panel upload-panel">
+      <div class="panel-title-row">
+        <h2><span class="step-dot">1</span>Upload candidate</h2>
+      </div>
+
+      <form id="upload-form">
+        <label id="dropzone" for="resume-input" class="dropzone">
+          <input id="resume-input" type="file" name="file" accept=".pdf,.docx,.txt" required hidden />
+          <div class="dropzone-icon">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+              <path d="M7 9l5-5 5 5" />
+              <path d="M12 4v12" />
+            </svg>
+          </div>
+          <p class="dropzone-title" id="dropzone-title">Drop a resume here, or click to browse</p>
+          <p class="dropzone-hint">PDF, DOCX, or TXT · up to 20MB</p>
+        </label>
+
+        <div class="form-row">
+          <div class="field">
+            <label class="field-label">Applied role</label>
+            <div class="segmented" id="role-segmented">
+              <button type="button" class="segmented-option active" data-role="PM">Product Manager</button>
+              <button type="button" class="segmented-option" data-role="SPM">Senior Product Manager</button>
+            </div>
+            <input type="hidden" id="role-input" name="role" value="PM" />
+          </div>
+
+          <button type="submit" id="upload-btn" class="btn-primary">
+            <span id="upload-btn-label">Score candidate</span>
+          </button>
         </div>
-        <div class="field">
-          <label for="role-select">Applied role</label>
-          <select id="role-select" name="role">
-            <option value="PM">Product Manager</option>
-            <option value="SPM">Senior Product Manager</option>
-          </select>
-        </div>
-        <button type="submit" id="upload-btn">Score candidate</button>
       </form>
       <p id="upload-error" class="error hidden"></p>
     </section>
 
+    <section id="stats-row" class="stats-row hidden">
+      <div class="stat-card">
+        <p class="stat-label">Scored</p>
+        <p class="stat-value" id="stat-total">0</p>
+      </div>
+      <div class="stat-card accent-blue">
+        <p class="stat-label">Fast-track</p>
+        <p class="stat-value" id="stat-fasttrack">0</p>
+      </div>
+      <div class="stat-card accent-green">
+        <p class="stat-label">Strong proceed</p>
+        <p class="stat-value" id="stat-strong">0</p>
+      </div>
+      <div class="stat-card accent-amber">
+        <p class="stat-label">Gate flagged</p>
+        <p class="stat-value" id="stat-flagged">0</p>
+      </div>
+    </section>
+
     <section class="panel">
-      <div class="panel-header">
-        <h2>Ranked candidates</h2>
+      <div class="panel-title-row">
+        <h2><span class="step-dot">2</span>Ranked candidates</h2>
         <span id="candidate-count" class="muted"></span>
       </div>
       <div id="candidates-wrap">
-        <p id="empty-state" class="muted padded">No candidates yet — upload a resume above to get started.</p>
+        <div id="loading-state" class="empty-state">
+          <p class="muted">Loading candidates…</p>
+        </div>
+        <div id="empty-state" class="empty-state hidden">
+          <div class="empty-icon">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="8" r="4" />
+              <path d="M4 20c0-4.4 3.6-7 8-7s8 2.6 8 7" />
+            </svg>
+          </div>
+          <p>No candidates yet</p>
+          <p class="muted">Upload a resume above to get started.</p>
+        </div>
         <table id="candidates-table" class="hidden">
           <thead>
             <tr>

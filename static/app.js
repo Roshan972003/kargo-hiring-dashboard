@@ -7,15 +7,33 @@ const DECISION_BADGE_CLASS = {
   fast_track: "badge-blue",
 };
 
+const DECISION_SHORT_LABELS = {
+  do_not_proceed: "Do not proceed",
+  proceed_if_ambiguity_strong: "Borderline",
+  strong_proceed: "Strong proceed",
+  fast_track: "Fast-track",
+};
+
 const uploadForm = document.getElementById("upload-form");
 const uploadBtn = document.getElementById("upload-btn");
+const uploadBtnLabel = document.getElementById("upload-btn-label");
 const uploadError = document.getElementById("upload-error");
 const resumeInput = document.getElementById("resume-input");
-const roleSelect = document.getElementById("role-select");
+const dropzone = document.getElementById("dropzone");
+const dropzoneTitle = document.getElementById("dropzone-title");
+const roleInput = document.getElementById("role-input");
+const roleSegmented = document.getElementById("role-segmented");
+
+const statsRow = document.getElementById("stats-row");
+const statTotal = document.getElementById("stat-total");
+const statFastTrack = document.getElementById("stat-fasttrack");
+const statStrong = document.getElementById("stat-strong");
+const statFlagged = document.getElementById("stat-flagged");
 
 const candidatesBody = document.getElementById("candidates-body");
 const candidatesTable = document.getElementById("candidates-table");
 const emptyState = document.getElementById("empty-state");
+const loadingState = document.getElementById("loading-state");
 const candidateCount = document.getElementById("candidate-count");
 
 const overlay = document.getElementById("overlay");
@@ -23,15 +41,84 @@ const detailPanel = document.getElementById("detail-panel");
 
 let candidates = [];
 
+// --- Role segmented control ---
+
+roleSegmented.addEventListener("click", (e) => {
+  const btn = e.target.closest(".segmented-option");
+  if (!btn) return;
+  roleSegmented.querySelectorAll(".segmented-option").forEach((b) => b.classList.remove("active"));
+  btn.classList.add("active");
+  roleInput.value = btn.dataset.role;
+});
+
+// --- Dropzone ---
+
+resumeInput.addEventListener("change", () => {
+  const file = resumeInput.files[0];
+  if (file) {
+    dropzoneTitle.textContent = file.name;
+    dropzone.classList.add("has-file");
+  } else {
+    dropzoneTitle.textContent = "Drop a resume here, or click to browse";
+    dropzone.classList.remove("has-file");
+  }
+});
+
+["dragover", "dragenter"].forEach((evt) =>
+  dropzone.addEventListener(evt, (e) => {
+    e.preventDefault();
+    dropzone.classList.add("drag-over");
+  })
+);
+
+["dragleave", "dragend"].forEach((evt) =>
+  dropzone.addEventListener(evt, () => dropzone.classList.remove("drag-over"))
+);
+
+dropzone.addEventListener("drop", (e) => {
+  e.preventDefault();
+  dropzone.classList.remove("drag-over");
+  const file = e.dataTransfer.files[0];
+  if (file) {
+    resumeInput.files = e.dataTransfer.files;
+    resumeInput.dispatchEvent(new Event("change"));
+  }
+});
+
+// --- Data loading ---
+
 async function loadCandidates() {
-  const res = await fetch("/api/candidates");
-  const data = await res.json();
-  candidates = data.candidates || [];
+  try {
+    const res = await fetch("/api/candidates");
+    const data = await res.json();
+    candidates = data.candidates || [];
+  } finally {
+    loadingState.classList.add("hidden");
+  }
   renderTable();
 }
 
+function initials(name) {
+  const parts = name.trim().split(/\s+/);
+  return ((parts[0]?.[0] || "") + (parts[1]?.[0] || "")).toUpperCase();
+}
+
+function renderStats() {
+  if (candidates.length === 0) {
+    statsRow.classList.add("hidden");
+    return;
+  }
+  statsRow.classList.remove("hidden");
+  statTotal.textContent = candidates.length;
+  statFastTrack.textContent = candidates.filter((c) => c.decision === "fast_track").length;
+  statStrong.textContent = candidates.filter((c) => c.decision === "strong_proceed").length;
+  statFlagged.textContent = candidates.filter((c) => c.gate.status === "flag").length;
+}
+
 function renderTable() {
-  candidateCount.textContent = `${candidates.length} scored`;
+  candidateCount.textContent = candidates.length ? `${candidates.length} scored` : "";
+  renderStats();
+
   if (candidates.length === 0) {
     emptyState.classList.remove("hidden");
     candidatesTable.classList.add("hidden");
@@ -43,12 +130,24 @@ function renderTable() {
   candidatesBody.innerHTML = "";
   candidates.forEach((c, i) => {
     const tr = document.createElement("tr");
+    const pct = Math.min(100, Math.max(0, (c.composite_score / 4) * 100));
     tr.innerHTML = `
-      <td><span class="rank">#${i + 1}</span>${escapeHtml(c.name)}</td>
-      <td>${c.role}</td>
-      <td style="font-family: ui-monospace, monospace">${c.composite_score.toFixed(2)}</td>
+      <td>
+        <div class="candidate-cell">
+          <span class="rank">#${i + 1}</span>
+          <span class="avatar">${initials(c.name)}</span>
+          <span class="candidate-name">${escapeHtml(c.name)}</span>
+        </div>
+      </td>
+      <td class="muted">${c.role}</td>
+      <td>
+        <div class="score-cell">
+          <span class="score-value">${c.composite_score.toFixed(2)}</span>
+          <span class="score-bar"><span class="score-bar-fill" style="width:${pct}%"></span></span>
+        </div>
+      </td>
       <td>${gateBadge(c.gate.status)}</td>
-      <td><span class="badge ${DECISION_BADGE_CLASS[c.decision]}">${META.decision_labels[c.decision]}</span></td>
+      <td><span class="badge ${DECISION_BADGE_CLASS[c.decision]}" title="${escapeHtml(META.decision_labels[c.decision])}">${DECISION_SHORT_LABELS[c.decision]}</span></td>
       <td class="muted">${c.email_sent ? "Sent" : "Draft"}</td>
     `;
     tr.addEventListener("click", () => openDetail(c.id));
@@ -67,19 +166,21 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+// --- Upload ---
+
 uploadForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   const file = resumeInput.files[0];
   if (!file) return;
 
   uploadBtn.disabled = true;
-  uploadBtn.textContent = "Scoring…";
+  uploadBtnLabel.textContent = "Scoring…";
   uploadError.classList.add("hidden");
 
   try {
     const form = new FormData();
     form.append("file", file);
-    form.append("role", roleSelect.value);
+    form.append("role", roleInput.value);
     const res = await fetch("/api/evaluate", { method: "POST", body: form });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Evaluation failed.");
@@ -90,14 +191,20 @@ uploadForm.addEventListener("submit", async (e) => {
     openDetail(data.candidate.id);
 
     uploadForm.reset();
+    dropzoneTitle.textContent = "Drop a resume here, or click to browse";
+    dropzone.classList.remove("has-file");
+    roleSegmented.querySelectorAll(".segmented-option").forEach((b, i) => b.classList.toggle("active", i === 0));
+    roleInput.value = "PM";
   } catch (err) {
     uploadError.textContent = err.message;
     uploadError.classList.remove("hidden");
   } finally {
     uploadBtn.disabled = false;
-    uploadBtn.textContent = "Score candidate";
+    uploadBtnLabel.textContent = "Score candidate";
   }
 });
+
+// --- Detail panel ---
 
 function openDetail(id) {
   const c = candidates.find((x) => x.id === id);
@@ -118,6 +225,10 @@ overlay.addEventListener("click", (e) => {
   if (e.target === overlay) closeDetail();
 });
 
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !overlay.classList.contains("hidden")) closeDetail();
+});
+
 function renderDetail(c) {
   const weights = META.weights[c.role];
   const pillarRows = META.pillar_ids
@@ -126,7 +237,7 @@ function renderDetail(c) {
       return `
         <div class="pillar-box">
           <div class="pillar-row">
-            <span>${META.pillar_names[p]}</span>
+            <span class="pillar-name">${META.pillar_names[p]}</span>
             <span class="pillar-score">${s.score}/4 · ${Math.round(weights[p] * 100)}%</span>
           </div>
           <p>${escapeHtml(s.rationale)}</p>
@@ -139,9 +250,12 @@ function renderDetail(c) {
 
   return `
     <div class="detail-header">
-      <div>
-        <h3>${escapeHtml(c.name)}</h3>
-        <p>${c.role === "PM" ? "Product Manager" : "Senior Product Manager"} · ${escapeHtml(c.file_name)}</p>
+      <div class="detail-header-left">
+        <span class="avatar" style="width:40px;height:40px;font-size:0.85rem">${initials(c.name)}</span>
+        <div>
+          <h3>${escapeHtml(c.name)}</h3>
+          <p>${c.role === "PM" ? "Product Manager" : "Senior Product Manager"} · ${escapeHtml(c.file_name)}</p>
+        </div>
       </div>
       <button class="close-btn">✕</button>
     </div>
@@ -157,7 +271,7 @@ function renderDetail(c) {
       </div>
     </div>
 
-    <div class="gate-box">
+    <div class="gate-box ${c.gate.status === "flag" ? "flag" : "clear"}">
       <p class="label">Pillar 6 gate — structured-environment risk</p>
       <p class="gate-status" style="color: ${c.gate.status === "flag" ? "var(--amber)" : "var(--green)"}">
         ${c.gate.status === "flag" ? "Flag — probe in interview" : "Clear"}
@@ -169,18 +283,27 @@ function renderDetail(c) {
     ${pillarRows}
 
     <p class="section-title">Interview brief</p>
-    <p style="font-size: 0.88rem; color: var(--text)">${escapeHtml(brief.summary)}</p>
+    <p class="brief-summary">${escapeHtml(brief.summary)}</p>
     ${briefBlock("Strengths", brief.strengths)}
     ${briefBlock("Risks to probe", brief.risks_to_probe)}
     ${briefBlock("Suggested questions", brief.suggested_questions)}
 
     <p class="section-title">Draft outreach email</p>
     <div class="email-form">
-      <input type="email" id="email-to" placeholder="candidate@email.com" value="${escapeHtml(c.email || "")}" />
-      <input type="text" id="email-subject" value="${escapeHtml(c.email_draft.subject)}" />
-      <textarea id="email-body">${escapeHtml(c.email_draft.body)}</textarea>
+      <div class="email-field">
+        <label>To</label>
+        <input type="email" id="email-to" placeholder="candidate@email.com" value="${escapeHtml(c.email || "")}" />
+      </div>
+      <div class="email-field">
+        <label>Subject</label>
+        <input type="text" id="email-subject" value="${escapeHtml(c.email_draft.subject)}" />
+      </div>
+      <div class="email-field">
+        <label>Body</label>
+        <textarea id="email-body">${escapeHtml(c.email_draft.body)}</textarea>
+      </div>
       <div class="send-row">
-        <button class="send-btn secondary">${c.email_sent ? "Re-send" : "Send email"}</button>
+        <button class="send-btn btn-primary">${c.email_sent ? "Re-send" : "Send email"}</button>
         ${c.email_sent ? `<span class="sent-note">Sent ${new Date(c.email_sent_at).toLocaleString()}</span>` : ""}
       </div>
       <p class="error hidden" id="send-error"></p>
