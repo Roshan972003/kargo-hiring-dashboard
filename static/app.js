@@ -38,6 +38,10 @@ const uploadProgressLabel = document.getElementById("upload-progress-label");
 
 const DEFAULT_DROPZONE_TEXT = "Drop resumes here, or click to browse";
 
+const gradingToggleRow = document.getElementById("grading-toggle-row");
+const viewRoleSegmented = document.getElementById("view-role-segmented");
+let viewRole = "PM";
+
 const statsRow = document.getElementById("stats-row");
 const statTotal = document.getElementById("stat-total");
 const statFastTrack = document.getElementById("stat-fasttrack");
@@ -76,6 +80,25 @@ roleSegmented.addEventListener("click", (e) => {
   btn.classList.add("active");
   roleInput.value = btn.dataset.role;
 });
+
+// --- Grading role toggle: every candidate is graded for both roles from ---
+// --- the same pillar scores, so switching just re-derives and re-renders. ---
+
+viewRoleSegmented.addEventListener("click", (e) => {
+  const btn = e.target.closest(".segmented-option");
+  if (!btn || btn.dataset.role === viewRole) return;
+  viewRoleSegmented.querySelectorAll(".segmented-option").forEach((b) => b.classList.remove("active"));
+  btn.classList.add("active");
+  viewRole = btn.dataset.role;
+  renderTable();
+  if (!overlay.classList.contains("hidden") && detailPanel.dataset.candidateId) {
+    openDetail(detailPanel.dataset.candidateId);
+  }
+});
+
+function grade(c) {
+  return gradeFor(c, viewRole, META.weights);
+}
 
 // --- Dropzone ---
 
@@ -151,24 +174,26 @@ function experienceLine(c) {
 function renderStats() {
   if (candidates.length === 0) {
     statsRow.classList.add("hidden");
+    gradingToggleRow.classList.add("hidden");
     return;
   }
   statsRow.classList.remove("hidden");
+  gradingToggleRow.classList.remove("hidden");
   statTotal.textContent = candidates.length;
-  statFastTrack.textContent = candidates.filter((c) => c.decision === "fast_track").length;
-  statStrong.textContent = candidates.filter((c) => c.decision === "strong_proceed").length;
+  statFastTrack.textContent = candidates.filter((c) => grade(c).decision === "fast_track").length;
+  statStrong.textContent = candidates.filter((c) => grade(c).decision === "strong_proceed").length;
   statFlagged.textContent = candidates.filter((c) => c.gate.status === "flag").length;
 }
 
 function getVisibleCandidates() {
   const q = searchInput.value.trim().toLowerCase();
-  if (!q) return candidates;
-  return candidates.filter(
-    (c) =>
-      c.name.toLowerCase().includes(q) ||
-      c.role.toLowerCase().includes(q) ||
-      (c.extracted?.current_role || "").toLowerCase().includes(q)
-  );
+  const filtered = q
+    ? candidates.filter(
+        (c) =>
+          c.name.toLowerCase().includes(q) || (c.extracted?.current_role || "").toLowerCase().includes(q)
+      )
+    : candidates;
+  return [...filtered].sort((a, b) => grade(b).composite - grade(a).composite);
 }
 
 function renderTable() {
@@ -202,7 +227,10 @@ function renderTable() {
   candidatesBody.innerHTML = "";
   visible.forEach((c, i) => {
     const tr = document.createElement("tr");
-    const pct = Math.min(100, Math.max(0, (c.composite_score / 4) * 100));
+    tr.className = "row-enter";
+    tr.style.animationDelay = `${Math.min(i, 12) * 0.03}s`;
+    const g = grade(c);
+    const pct = Math.min(100, Math.max(0, (g.composite / 4) * 100));
     const exp = experienceLine(c);
     tr.innerHTML = `
       <td>
@@ -215,15 +243,14 @@ function renderTable() {
           </div>
         </div>
       </td>
-      <td class="muted">${c.role}</td>
       <td>
         <div class="score-cell">
-          <span class="score-value">${c.composite_score.toFixed(2)}</span>
-          <span class="score-bar"><span class="score-bar-fill" style="width:${pct}%"></span></span>
+          <span class="score-value">${g.composite.toFixed(2)}</span>
+          <span class="score-bar"><span class="score-bar-fill" data-width="${pct}%" style="width:0%"></span></span>
         </div>
       </td>
       <td>${gateBadge(c.gate.status)}</td>
-      <td><span class="badge ${DECISION_BADGE_CLASS[c.decision]}" title="${escapeHtml(META.decision_labels[c.decision])}">${DECISION_SHORT_LABELS[c.decision]}</span></td>
+      <td><span class="badge ${DECISION_BADGE_CLASS[g.decision]}" title="${escapeHtml(META.decision_labels[g.decision])}">${DECISION_SHORT_LABELS[g.decision]}</span></td>
       <td class="muted">${c.email_sent ? "Sent" : "Draft"}</td>
       <td class="row-actions">
         <a class="row-icon-btn" href="/candidate/${c.id}" target="_blank" rel="noopener" title="Open full page" aria-label="Open full page">
@@ -249,6 +276,20 @@ function renderTable() {
     candidatesBody.appendChild(tr);
   });
   candidatesWrap.scrollLeft = 0;
+  animateBars();
+}
+
+// Bars are rendered at width:0 with the real value in data-width, then
+// nudged to their target on the next frame so the width transition
+// actually plays instead of snapping straight to the final state.
+function animateBars() {
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      document.querySelectorAll("[data-width]").forEach((el) => {
+        el.style.width = el.dataset.width;
+      });
+    });
+  });
 }
 
 searchInput.addEventListener("input", () => renderTable());
@@ -313,9 +354,10 @@ exportBtn.addEventListener("click", () => {
 
   const header = [
     "Name",
-    "Role",
-    "Composite score",
-    "Decision",
+    "PM composite",
+    "PM decision",
+    "Senior PM composite",
+    "Senior PM decision",
     "Gate",
     "Years experience",
     "Current role",
@@ -324,12 +366,15 @@ exportBtn.addEventListener("click", () => {
   ];
   const lines = [header.map(csvEscape).join(",")];
   rows.forEach((c) => {
+    const pm = gradeFor(c, "PM", META.weights);
+    const spm = gradeFor(c, "SPM", META.weights);
     lines.push(
       [
         c.name,
-        c.role,
-        c.composite_score.toFixed(2),
-        META.decision_labels[c.decision],
+        pm.composite.toFixed(2),
+        META.decision_labels[pm.decision],
+        spm.composite.toFixed(2),
+        META.decision_labels[spm.decision],
         c.gate.status,
         c.extracted?.years_experience ?? "",
         c.extracted?.current_role ?? "",
@@ -359,7 +404,7 @@ function renderBarRow(label, value, max, color, valueText) {
   return `
     <div class="bar-chart-row">
       <span class="bar-chart-label" title="${escapeHtml(label)}">${escapeHtml(label)}</span>
-      <span class="bar-chart-track"><span class="bar-chart-fill" style="width:${pct}%;background:${color}"></span></span>
+      <span class="bar-chart-track"><span class="bar-chart-fill" data-width="${pct}%" style="width:0%;background:${color}"></span></span>
       <span class="bar-chart-value">${escapeHtml(valueText)}</span>
     </div>
   `;
@@ -368,13 +413,14 @@ function renderBarRow(label, value, max, color, valueText) {
 function renderCharts() {
   if (candidates.length === 0) return;
 
-  // Score comparison: one bar per candidate, sorted by composite score.
-  // Capped so the chart stays readable once the list grows large.
+  // Score comparison: one bar per candidate, sorted by composite score for
+  // the currently selected grading role. Capped so the chart stays readable
+  // once the list grows large.
   const SCORE_CHART_CAP = 12;
-  const ranked = [...candidates].sort((a, b) => b.composite_score - a.composite_score);
+  const ranked = [...candidates].sort((a, b) => grade(b).composite - grade(a).composite);
   const shown = ranked.slice(0, SCORE_CHART_CAP);
   scoreChart.innerHTML = shown
-    .map((c) => renderBarRow(c.name, c.composite_score, 4, "var(--accent)", c.composite_score.toFixed(2)))
+    .map((c) => renderBarRow(c.name, grade(c).composite, 4, "var(--accent)", grade(c).composite.toFixed(2)))
     .join("");
   if (ranked.length > SCORE_CHART_CAP) {
     scoreChart.innerHTML += `<p class="bar-chart-empty">+ ${ranked.length - SCORE_CHART_CAP} more — see the table below</p>`;
@@ -382,11 +428,13 @@ function renderCharts() {
 
   // Decision breakdown: fixed worst -> best order, count per band.
   const order = ["do_not_proceed", "proceed_if_ambiguity_strong", "strong_proceed", "fast_track"];
-  const counts = order.map((d) => candidates.filter((c) => c.decision === d).length);
+  const counts = order.map((d) => candidates.filter((c) => grade(c).decision === d).length);
   const maxCount = Math.max(...counts, 1);
   decisionChart.innerHTML = order
     .map((d, i) => renderBarRow(DECISION_SHORT_LABELS[d], counts[i], maxCount, DECISION_COLORS[d], String(counts[i])))
     .join("");
+
+  animateBars();
 }
 
 function gateBadge(status) {
@@ -482,6 +530,7 @@ function openDetail(id) {
   detailPanel.querySelector(".close-btn").addEventListener("click", closeDetail);
   detailPanel.querySelector(".send-btn").addEventListener("click", () => sendEmail(c.id));
   detailPanel.querySelector(".detail-delete-btn").addEventListener("click", () => deleteCandidate(c.id));
+  animateBars();
 }
 
 function closeDetail() {
@@ -500,7 +549,8 @@ document.addEventListener("keydown", (e) => {
 });
 
 function renderDetail(c) {
-  const weights = META.weights[c.role];
+  const g = grade(c);
+  const weights = META.weights[viewRole];
   const pillarRows = META.pillar_ids
     .map((p) => {
       const s = c.pillar_scores[p];
@@ -510,7 +560,7 @@ function renderDetail(c) {
             <span class="pillar-name">${META.pillar_names[p]}</span>
             <span class="pillar-score">${s.score}/4 · ${Math.round(weights[p] * 100)}%</span>
           </div>
-          <div class="pillar-bar-track"><div class="pillar-bar-fill" style="width:${(s.score / 4) * 100}%"></div></div>
+          <div class="pillar-bar-track"><div class="pillar-bar-fill" data-width="${(s.score / 4) * 100}%" style="width:0%"></div></div>
           <p>${escapeHtml(s.rationale)}</p>
         </div>
       `;
@@ -525,7 +575,7 @@ function renderDetail(c) {
         <span class="avatar" style="width:40px;height:40px;font-size:0.85rem">${initials(c.name)}</span>
         <div>
           <h3>${escapeHtml(c.name)}</h3>
-          <p>${c.role === "PM" ? "Product Manager" : "Senior Product Manager"} · ${escapeHtml(c.file_name)}</p>
+          <p>Grading as ${viewRole === "PM" ? "Product Manager" : "Senior Product Manager"} · ${escapeHtml(c.file_name)}</p>
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:8px">
@@ -548,11 +598,11 @@ function renderDetail(c) {
     <div class="stat-grid">
       <div class="stat-box">
         <p class="label">Composite score</p>
-        <p class="value">${c.composite_score.toFixed(2)}</p>
+        <p class="value">${g.composite.toFixed(2)}</p>
       </div>
       <div class="stat-box">
         <p class="label">Decision</p>
-        <p class="value small">${META.decision_labels[c.decision]}</p>
+        <p class="value small">${META.decision_labels[g.decision]}</p>
       </div>
     </div>
 

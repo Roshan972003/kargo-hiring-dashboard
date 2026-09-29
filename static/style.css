@@ -19,6 +19,19 @@
   --radius-md: 10px;
   --radius-sm: 7px;
   --shadow-panel: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 20px 40px -24px rgba(0, 0, 0, 0.6);
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+:root[data-theme="light"] {
+  --bg: #f4f6fb;
+  --panel: #ffffff;
+  --panel-2: #f1f4fa;
+  --panel-border: rgba(15, 23, 42, 0.09);
+  --panel-border-hover: rgba(15, 23, 42, 0.18);
+  --text: #10172a;
+  --muted: #5b6478;
+  --muted-2: #8891a3;
+  --shadow-panel: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 20px 40px -28px rgba(15, 23, 42, 0.22);
 }
 
 * {
@@ -32,6 +45,7 @@ body {
   font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   position: relative;
+  transition: background 0.25s var(--ease), color 0.25s var(--ease);
 }
 
 .bg-glow {
@@ -42,6 +56,32 @@ body {
   background:
     radial-gradient(680px 420px at 12% -8%, rgba(79, 142, 247, 0.16), transparent 60%),
     radial-gradient(560px 380px at 100% 0%, rgba(124, 111, 242, 0.12), transparent 55%);
+  animation: drift 22s ease-in-out infinite alternate;
+}
+
+:root[data-theme="light"] .bg-glow {
+  background:
+    radial-gradient(680px 420px at 12% -8%, rgba(79, 142, 247, 0.1), transparent 60%),
+    radial-gradient(560px 380px at 100% 0%, rgba(124, 111, 242, 0.08), transparent 55%);
+}
+
+@keyframes drift {
+  from { transform: translate(0, 0) scale(1); }
+  to { transform: translate(-2%, 2%) scale(1.05); }
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shimmer {
+  from { background-position: -400px 0; }
+  to { background-position: 400px 0; }
+}
+
+.animate-in {
+  animation: fade-up 0.5s var(--ease) both;
 }
 
 .page {
@@ -123,15 +163,72 @@ a.tag:hover {
   border-color: var(--panel-border-hover);
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.theme-toggle {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel);
+  color: var(--muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.15s, color 0.15s, transform 0.15s var(--ease);
+}
+
+.theme-toggle:hover {
+  color: var(--text);
+  border-color: var(--panel-border-hover);
+  transform: rotate(12deg);
+}
+
+.theme-toggle .icon-sun {
+  display: none;
+}
+
+:root[data-theme="light"] .theme-toggle .icon-moon {
+  display: none;
+}
+
+:root[data-theme="light"] .theme-toggle .icon-sun {
+  display: block;
+}
+
 /* Panels */
 
 .panel {
+  position: relative;
   margin-top: 20px;
   border: 1px solid var(--panel-border);
   border-radius: var(--radius-lg);
   background: linear-gradient(180deg, var(--panel), var(--panel) 100%);
   box-shadow: var(--shadow-panel);
   padding: 24px 26px;
+  transition: border-color 0.2s var(--ease), box-shadow 0.2s var(--ease), background 0.25s var(--ease);
+  overflow: hidden;
+}
+
+.panel::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 6%;
+  right: 6%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(124, 143, 247, 0.55), transparent);
+}
+
+.panel:hover {
+  border-color: var(--panel-border-hover);
 }
 
 .panel-title-row {
@@ -300,17 +397,21 @@ button {
   font-weight: 600;
   color: white;
   background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  background-size: 160% 160%;
   box-shadow: 0 8px 20px -8px rgba(79, 142, 247, 0.6);
-  transition: filter 0.15s, transform 0.1s;
+  transition: filter 0.15s, transform 0.15s var(--ease), box-shadow 0.15s var(--ease), background-position 0.4s var(--ease);
   white-space: nowrap;
 }
 
 .btn-primary:hover:not(:disabled) {
   filter: brightness(1.08);
+  transform: translateY(-1px);
+  box-shadow: 0 12px 26px -8px rgba(79, 142, 247, 0.7);
+  background-position: 100% 0;
 }
 
 .btn-primary:active:not(:disabled) {
-  transform: translateY(1px);
+  transform: translateY(0px);
 }
 
 .btn-primary:disabled {
@@ -354,6 +455,34 @@ button {
 
 .hidden {
   display: none !important;
+}
+
+/* Grading role toggle */
+
+.grading-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 20px;
+  padding: 14px 20px;
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  box-shadow: var(--shadow-panel);
+}
+
+.grading-toggle-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.grading-toggle-hint {
+  font-size: 0.78rem;
 }
 
 /* Stats row */
@@ -430,6 +559,40 @@ button {
   margin: 0;
 }
 
+/* Skeleton loader */
+
+.skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+}
+
+.skeleton-block {
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    var(--panel-2) 0%,
+    rgba(148, 163, 184, 0.16) 50%,
+    var(--panel-2) 100%
+  );
+  background-size: 800px 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+.skeleton-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.skeleton-line {
+  height: 12px;
+  flex: 1;
+  max-width: 220px;
+}
+
 /* Table */
 
 #candidates-wrap {
@@ -458,6 +621,10 @@ tbody tr {
   cursor: pointer;
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
   transition: background 0.12s;
+}
+
+tbody tr.row-enter {
+  animation: fade-up 0.4s var(--ease) both;
 }
 
 tbody tr:last-child {
@@ -584,6 +751,7 @@ tbody td {
   height: 100%;
   border-radius: 999px;
   background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  transition: width 0.7s var(--ease);
 }
 
 .badge {
@@ -990,6 +1158,7 @@ textarea:focus {
   height: 20px;
   border-radius: 4px 0 0 4px;
   min-width: 4px;
+  transition: width 0.8s var(--ease);
 }
 
 .bar-chart-fill:last-child {
@@ -1023,6 +1192,7 @@ textarea:focus {
   height: 100%;
   border-radius: 4px;
   background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  transition: width 0.8s var(--ease);
 }
 
 /* Confirm modal */
@@ -1118,8 +1288,8 @@ textarea:focus {
   .bar-chart-row {
     grid-template-columns: 76px 1fr 40px;
   }
-  thead th:nth-child(2),
-  tbody td:nth-child(2) {
+  thead th:nth-child(3),
+  tbody td:nth-child(3) {
     display: none;
   }
 }
