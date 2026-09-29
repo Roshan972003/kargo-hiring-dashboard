@@ -20,7 +20,7 @@ const DECISION_COLORS = {
   do_not_proceed: "#f87171",
   proceed_if_ambiguity_strong: "#fbbf24",
   strong_proceed: "#34d399",
-  fast_track: "#4f8ef7",
+  fast_track: "#6d5ef0",
 };
 
 const uploadForm = document.getElementById("upload-form");
@@ -64,6 +64,9 @@ const noResults = document.getElementById("no-results");
 const noResultsQuery = document.getElementById("no-results-query");
 const exportBtn = document.getElementById("export-btn");
 const deleteAllBtn = document.getElementById("delete-all-btn");
+const viewModeSegmented = document.getElementById("view-mode-segmented");
+const pipelineView = document.getElementById("pipeline-view");
+let viewMode = "table";
 
 const chartsRow = document.getElementById("charts-row");
 const scoreChart = document.getElementById("score-chart");
@@ -99,6 +102,17 @@ viewRoleSegmented.addEventListener("click", (e) => {
 function grade(c) {
   return gradeFor(c, viewRole, META.weights);
 }
+
+// --- Table / Pipeline view toggle ---
+
+viewModeSegmented.addEventListener("click", (e) => {
+  const btn = e.target.closest(".segmented-option");
+  if (!btn || btn.dataset.mode === viewMode) return;
+  viewModeSegmented.querySelectorAll(".segmented-option").forEach((b) => b.classList.remove("active"));
+  btn.classList.add("active");
+  viewMode = btn.dataset.mode;
+  renderTable();
+});
 
 // --- Dropzone ---
 
@@ -205,6 +219,7 @@ function renderTable() {
     emptyState.classList.remove("hidden");
     noResults.classList.add("hidden");
     candidatesTable.classList.add("hidden");
+    pipelineView.classList.add("hidden");
     toolbar.classList.add("hidden");
     chartsRow.classList.add("hidden");
     return;
@@ -217,11 +232,20 @@ function renderTable() {
 
   if (visible.length === 0) {
     candidatesTable.classList.add("hidden");
+    pipelineView.classList.add("hidden");
     noResults.classList.remove("hidden");
     noResultsQuery.textContent = searchInput.value.trim();
     return;
   }
   noResults.classList.add("hidden");
+
+  if (viewMode === "pipeline") {
+    candidatesTable.classList.add("hidden");
+    pipelineView.classList.remove("hidden");
+    renderPipeline(visible);
+    return;
+  }
+  pipelineView.classList.add("hidden");
   candidatesTable.classList.remove("hidden");
 
   candidatesBody.innerHTML = "";
@@ -276,6 +300,59 @@ function renderTable() {
     candidatesBody.appendChild(tr);
   });
   candidatesWrap.scrollLeft = 0;
+  animateBars();
+}
+
+const PIPELINE_STAGES = [
+  { key: "do_not_proceed", label: "Do not proceed", color: "var(--red)" },
+  { key: "proceed_if_ambiguity_strong", label: "Borderline", color: "var(--amber)" },
+  { key: "strong_proceed", label: "Strong proceed", color: "var(--green)" },
+  { key: "fast_track", label: "Fast-track", color: "var(--blue)" },
+];
+
+function renderPipeline(visible) {
+  pipelineView.innerHTML = PIPELINE_STAGES.map((stage) => {
+    const inStage = visible
+      .filter((c) => grade(c).decision === stage.key)
+      .sort((a, b) => grade(b).composite - grade(a).composite);
+
+    const cards = inStage
+      .map((c) => {
+        const g = grade(c);
+        const exp = experienceLine(c);
+        return `
+          <div class="pipeline-card" data-id="${c.id}">
+            <div class="pipeline-card-top">
+              <span class="avatar" style="width:26px;height:26px;font-size:0.66rem">${initials(c.name)}</span>
+              <span class="pipeline-card-name" title="${escapeHtml(c.name)}">${escapeHtml(c.name)}</span>
+            </div>
+            ${exp ? `<p class="pipeline-card-sub" title="${escapeHtml(exp)}">${escapeHtml(exp)}</p>` : ""}
+            <div class="pipeline-card-foot">
+              <span class="pipeline-card-score">${g.composite.toFixed(2)}</span>
+              ${gateBadge(c.gate.status)}
+            </div>
+          </div>
+        `;
+      })
+      .join("");
+
+    return `
+      <div class="pipeline-col">
+        <div class="pipeline-col-header" style="--stage-color:${stage.color}">
+          <p class="pipeline-col-title">${stage.label}</p>
+          <span class="pipeline-col-count">${inStage.length} candidate${inStage.length === 1 ? "" : "s"}</span>
+        </div>
+        <div class="pipeline-col-body">
+          ${cards || `<p class="pipeline-col-empty">No candidates here</p>`}
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  pipelineView.querySelectorAll(".pipeline-card").forEach((card) => {
+    card.addEventListener("click", () => openDetail(card.dataset.id));
+  });
+
   animateBars();
 }
 
