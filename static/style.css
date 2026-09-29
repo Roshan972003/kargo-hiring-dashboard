@@ -1178,6 +1178,37 @@ textarea:focus {
   padding: 8px 0;
 }
 
+.bar-chart-toggle {
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--accent);
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 8px 0 0;
+  text-align: left;
+  transition: color 0.15s;
+}
+
+.bar-chart-toggle:hover {
+  color: var(--accent-2);
+  text-decoration: underline;
+}
+
+.bar-chart-scroll {
+  max-height: 420px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.bar-chart-scroll .bar-chart-toggle {
+  position: sticky;
+  bottom: 0;
+  background: var(--panel);
+  width: 100%;
+  padding: 8px 0;
+}
+
 /* Pillar bar (detail panel) */
 
 .pillar-bar-track {

@@ -410,20 +410,33 @@ function renderBarRow(label, value, max, color, valueText) {
   `;
 }
 
+let scoreChartExpanded = false;
+
 function renderCharts() {
   if (candidates.length === 0) return;
 
   // Score comparison: one bar per candidate, sorted by composite score for
-  // the currently selected grading role. Capped so the chart stays readable
-  // once the list grows large.
+  // the currently selected grading role. Capped by default so the chart
+  // stays readable once the list grows large, with a click to expand.
   const SCORE_CHART_CAP = 12;
   const ranked = [...candidates].sort((a, b) => grade(b).composite - grade(a).composite);
-  const shown = ranked.slice(0, SCORE_CHART_CAP);
+  const shown = scoreChartExpanded ? ranked : ranked.slice(0, SCORE_CHART_CAP);
+  scoreChart.classList.toggle("bar-chart-scroll", scoreChartExpanded);
   scoreChart.innerHTML = shown
     .map((c) => renderBarRow(c.name, grade(c).composite, 4, "var(--accent)", grade(c).composite.toFixed(2)))
     .join("");
   if (ranked.length > SCORE_CHART_CAP) {
-    scoreChart.innerHTML += `<p class="bar-chart-empty">+ ${ranked.length - SCORE_CHART_CAP} more — see the table below</p>`;
+    const remaining = ranked.length - SCORE_CHART_CAP;
+    scoreChart.innerHTML += scoreChartExpanded
+      ? `<button type="button" class="bar-chart-toggle" id="score-chart-toggle">Show fewer</button>`
+      : `<button type="button" class="bar-chart-toggle" id="score-chart-toggle">+ ${remaining} more — show all</button>`;
+  }
+  const toggleBtn = document.getElementById("score-chart-toggle");
+  if (toggleBtn) {
+    toggleBtn.addEventListener("click", () => {
+      scoreChartExpanded = !scoreChartExpanded;
+      renderCharts();
+    });
   }
 
   // Decision breakdown: fixed worst -> best order, count per band.
