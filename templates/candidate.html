@@ -30,8 +30,13 @@
           <p>{{ "Product Manager" if candidate.role == "PM" else "Senior Product Manager" }} · {{ candidate.file_name }}</p>
         </div>
       </div>
-      <div class="header-actions">
+      <div class="header-actions no-print">
         <a href="/" class="tag">← All candidates</a>
+        <button id="print-btn" class="theme-toggle" type="button" title="Print scorecard" aria-label="Print scorecard">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>
+          </svg>
+        </button>
         <button id="theme-toggle" class="theme-toggle" type="button" title="Toggle theme" aria-label="Toggle theme">
           <svg class="icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z" />
@@ -72,12 +77,28 @@
         </div>
       </div>
 
+      <div class="stat-box" style="margin-bottom: 20px;">
+        <p class="label">Pipeline stage</p>
+        <select id="status-select" class="status-select badge {{ status_badge_class }}">
+          {% for s in meta.hiring_status_order %}
+          <option value="{{ s }}" {{ 'selected' if candidate.hiring_status == s else '' }}>{{ meta.hiring_status_labels[s] }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
       <div class="gate-box {{ 'flag' if candidate.gate.status == 'flag' else 'clear' }}">
         <p class="label">Pillar 6 gate — structured-environment risk</p>
         <p class="gate-status" style="color: {{ 'var(--amber)' if candidate.gate.status == 'flag' else 'var(--green)' }}">
           {{ "Flag — probe in interview" if candidate.gate.status == "flag" else "Clear" }}
         </p>
         <p class="muted">{{ candidate.gate.rationale }}</p>
+      </div>
+
+      <p class="section-title">Notes</p>
+      <textarea id="candidate-notes" class="notes-textarea" placeholder="Private notes — referral source, follow-ups, interview feedback…">{{ candidate.notes }}</textarea>
+      <div class="notes-footer no-print">
+        <span class="muted" id="notes-status"></span>
+        <button class="btn-secondary btn-small" id="notes-save-btn" type="button">Save notes</button>
       </div>
 
       <p class="section-title">Extracted profile</p>
@@ -132,8 +153,8 @@
       </div>
       {% endif %}
 
-      <p class="section-title">Draft outreach email</p>
-      <div class="email-form">
+      <p class="section-title no-print">Draft outreach email</p>
+      <div class="email-form no-print">
         <div class="email-field">
           <label>To</label>
           <input type="email" id="email-to" placeholder="candidate@email.com" value="{{ candidate.email or '' }}" />
@@ -156,7 +177,7 @@
       </div>
     </section>
 
-    <section class="panel animate-in" style="animation-delay: 0.1s">
+    <section class="panel animate-in no-print" style="animation-delay: 0.1s">
       <div class="panel-title-row">
         <h2>Danger zone</h2>
       </div>
@@ -174,6 +195,7 @@
     window.CANDIDATE_ROLE = {{ candidate.role | tojson }};
     window.WEIGHTS = {{ meta.weights | tojson }};
     window.DECISION_LABELS = {{ meta.decision_labels | tojson }};
+    window.HIRING_STATUS_LABELS = {{ meta.hiring_status_labels | tojson }};
   </script>
   <script src="{{ url_for('static', filename='ui.js') }}"></script>
   <script src="{{ url_for('static', filename='candidate.js') }}"></script>

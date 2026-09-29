@@ -75,6 +75,39 @@ sendBtn.addEventListener("click", async () => {
   }
 });
 
+// --- Pipeline stage (hiring status) ---
+
+const statusSelect = document.getElementById("status-select");
+statusSelect.addEventListener("change", async () => {
+  const newStatus = statusSelect.value;
+  Object.values(HIRING_STATUS_BADGE_CLASS).forEach((cls) => statusSelect.classList.remove(cls));
+  statusSelect.classList.add(HIRING_STATUS_BADGE_CLASS[newStatus]);
+  const updated = await patchCandidate(window.CANDIDATE_ID, { hiring_status: newStatus });
+  if (updated) showToast(`Marked as ${window.HIRING_STATUS_LABELS[newStatus] || newStatus}.`);
+});
+
+// --- Notes ---
+
+const notesTextarea = document.getElementById("candidate-notes");
+const notesStatus = document.getElementById("notes-status");
+const notesSaveBtn = document.getElementById("notes-save-btn");
+notesTextarea.addEventListener("input", () => {
+  notesStatus.textContent = "Unsaved changes";
+});
+notesSaveBtn.addEventListener("click", async () => {
+  notesSaveBtn.disabled = true;
+  notesSaveBtn.textContent = "Saving…";
+  const updated = await patchCandidate(window.CANDIDATE_ID, { notes: notesTextarea.value });
+  notesSaveBtn.disabled = false;
+  notesSaveBtn.textContent = "Save notes";
+  notesStatus.textContent = updated ? "Saved" : "";
+  if (updated) setTimeout(() => (notesStatus.textContent = ""), 2000);
+});
+
+// --- Print ---
+
+document.getElementById("print-btn").addEventListener("click", () => window.print());
+
 document.getElementById("delete-candidate-btn").addEventListener("click", async () => {
   const ok = await confirmDialog(
     "Delete candidate?",

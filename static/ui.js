@@ -83,6 +83,37 @@ function gradeFor(candidate, role, weightsByRole) {
   return { composite, decision };
 }
 
+// --- Hiring status (manual pipeline stage) helpers ---
+//
+// Separate from the AI's decision recommendation above - never set by the
+// model, always a deliberate action by whoever is running the pipeline.
+
+const HIRING_STATUS_BADGE_CLASS = {
+  new: "badge-gray",
+  reviewing: "badge-blue",
+  interview_scheduled: "badge-amber",
+  interviewed: "badge-fuchsia",
+  offer_extended: "badge-pink",
+  hired: "badge-green",
+  rejected: "badge-red",
+};
+
+async function patchCandidate(id, patch) {
+  try {
+    const res = await fetch(`/api/candidates/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Update failed.");
+    return data.candidate;
+  } catch (err) {
+    showToast(err.message);
+    return null;
+  }
+}
+
 // --- Theme toggle (dark default; persisted in localStorage) ---
 
 const themeToggle = document.getElementById("theme-toggle");

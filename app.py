@@ -27,6 +27,30 @@ PORT = int(os.environ.get("PORT", 5002))
 MAX_FILE_SIZE = 4 * 1024 * 1024  # 4MB
 ALLOWED_EXTENSIONS = {"pdf", "docx", "txt"}
 
+# The AI's "decision" is a scoring recommendation; hiring_status is the
+# founder's own manual pipeline stage, tracked separately and never set by
+# the model. New candidates default to "new".
+HIRING_STATUS_LABELS = {
+    "new": "New",
+    "reviewing": "Reviewing",
+    "interview_scheduled": "Interview scheduled",
+    "interviewed": "Interviewed",
+    "offer_extended": "Offer extended",
+    "hired": "Hired",
+    "rejected": "Rejected",
+}
+HIRING_STATUS_ORDER = list(HIRING_STATUS_LABELS.keys())
+HIRING_STATUS_BADGE_CLASS = {
+    "new": "badge-gray",
+    "reviewing": "badge-blue",
+    "interview_scheduled": "badge-amber",
+    "interviewed": "badge-fuchsia",
+    "offer_extended": "badge-pink",
+    "hired": "badge-green",
+    "rejected": "badge-red",
+}
+NOTES_MAX_LEN = 5000
+
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = MAX_FILE_SIZE + 256 * 1024
 
@@ -37,6 +61,8 @@ def _meta():
         "pillar_names": PILLAR_NAMES,
         "weights": WEIGHTS,
         "decision_labels": DECISION_LABELS,
+        "hiring_status_labels": HIRING_STATUS_LABELS,
+        "hiring_status_order": HIRING_STATUS_ORDER,
     }
 
 
@@ -50,9 +76,18 @@ def candidate_page(candidate_id):
     candidate = get_candidate(candidate_id)
     if candidate is None:
         abort(404)
+    candidate.setdefault("hiring_status", "new")
+    candidate.setdefault("notes", "")
     parts = candidate["name"].split()
     initials = ((parts[0][0] if parts else "") + (parts[1][0] if len(parts) > 1 else "")).upper()
-    return render_template("candidate.html", candidate=candidate, meta=_meta(), initials=initials)
+    status_badge_class = HIRING_STATUS_BADGE_CLASS[candidate["hiring_status"]]
+    return render_template(
+        "candidate.html",
+        candidate=candidate,
+        meta=_meta(),
+        initials=initials,
+        status_badge_class=status_badge_class,
+    )
 
 
 @app.route("/api/evaluate", methods=["POST"])
@@ -122,6 +157,8 @@ def evaluate():
         "email_draft": {"subject": email_subject, "body": email_body},
         "email_sent": False,
         "email_sent_at": None,
+        "hiring_status": "new",
+        "notes": "",
     }
 
     add_candidate(candidate)
@@ -147,6 +184,30 @@ def remove_candidate(candidate_id):
     if not deleted:
         return jsonify(error="Candidate not found."), 404
     return jsonify(deleted=True)
+
+
+@app.route("/api/candidates/<candidate_id>", methods=["PATCH"])
+def patch_candidate(candidate_id):
+    payload = request.get_json(silent=True) or {}
+    patch = {}
+
+    if "hiring_status" in payload:
+        if payload["hiring_status"] not in HIRING_STATUS_LABELS:
+            return jsonify(error="Invalid hiring_status."), 400
+        patch["hiring_status"] = payload["hiring_status"]
+
+    if "notes" in payload:
+        notes = str(payload["notes"])[:NOTES_MAX_LEN]
+        patch["notes"] = notes
+
+    if not patch:
+        return jsonify(error="Nothing to update. Send hiring_status and/or notes."), 400
+
+    updated = update_candidate(candidate_id, patch)
+    if updated is None:
+        return jsonify(error="Candidate not found."), 404
+
+    return jsonify(candidate=updated)
 
 
 @app.route("/api/send-email", methods=["POST"])

@@ -636,6 +636,33 @@ thead th {
   border-bottom: 1px solid var(--panel-border);
 }
 
+thead th.sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.15s;
+}
+
+thead th.sortable:hover {
+  color: var(--text);
+}
+
+.sort-arrow {
+  display: inline-block;
+  width: 8px;
+}
+
+thead th.sort-active {
+  color: var(--accent);
+}
+
+thead th.sort-active .sort-arrow::after {
+  content: "▾";
+}
+
+thead th.sort-active.sort-asc .sort-arrow::after {
+  content: "▴";
+}
+
 tbody tr {
   cursor: pointer;
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
@@ -805,6 +832,39 @@ tbody td {
   background: rgba(109, 94, 240, 0.14);
   border-color: rgba(109, 94, 240, 0.32);
   color: var(--blue);
+}
+
+.badge-gray {
+  background: rgba(148, 163, 184, 0.12);
+  border-color: rgba(148, 163, 184, 0.28);
+  color: var(--muted);
+}
+
+.badge-fuchsia {
+  background: rgba(192, 38, 211, 0.14);
+  border-color: rgba(192, 38, 211, 0.32);
+  color: var(--accent-2);
+}
+
+.badge-pink {
+  background: rgba(236, 72, 153, 0.14);
+  border-color: rgba(236, 72, 153, 0.32);
+  color: var(--accent-3);
+}
+
+.status-select {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 1px solid;
+  border-radius: 999px;
+  padding: 3px 26px 3px 11px;
+  font-size: 0.72rem;
+  font-weight: 500;
+  cursor: pointer;
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 10px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239992b8' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
 }
 
 /* Detail overlay */
@@ -994,6 +1054,37 @@ tbody td {
   line-height: 1.6;
   color: var(--text);
   margin: 0 0 16px;
+}
+
+.notes-textarea {
+  width: 100%;
+  min-height: 80px;
+  resize: vertical;
+  background: var(--panel-2);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  padding: 10px 12px;
+  font-size: 0.85rem;
+  font-family: inherit;
+  line-height: 1.5;
+  transition: border-color 0.15s;
+}
+
+.notes-textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.notes-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 8px 0 20px;
+}
+
+.notes-footer .muted {
+  font-size: 0.76rem;
 }
 
 .brief-block {
@@ -1219,6 +1310,15 @@ textarea:focus {
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+
+.pipeline-card-status {
+  margin-top: 8px;
+}
+
+.pipeline-card-status .status-select {
+  width: 100%;
+  text-align: left;
 }
 
 .pipeline-card-score {
@@ -1453,5 +1553,35 @@ textarea:focus {
   thead th:nth-child(3),
   tbody td:nth-child(3) {
     display: none;
+  }
+}
+
+/* Print (candidate scorecard) */
+
+@media print {
+  .no-print,
+  .bg-glow,
+  .bg-grain {
+    display: none !important;
+  }
+  body {
+    background: white;
+    color: black;
+  }
+  .panel {
+    box-shadow: none;
+    border: 1px solid #ccc;
+    break-inside: avoid;
+  }
+  .panel::before {
+    display: none;
+  }
+  .pillar-box,
+  .gate-box,
+  .stat-box {
+    break-inside: avoid;
+  }
+  a[href]::after {
+    content: none;
   }
 }

@@ -23,6 +23,7 @@ const DECISION_COLORS = {
   fast_track: "#6d5ef0",
 };
 
+
 const uploadForm = document.getElementById("upload-form");
 const uploadBtn = document.getElementById("upload-btn");
 const uploadBtnLabel = document.getElementById("upload-btn-label");
@@ -73,6 +74,8 @@ const scoreChart = document.getElementById("score-chart");
 const decisionChart = document.getElementById("decision-chart");
 
 let candidates = [];
+let sortKey = "composite";
+let sortDir = "desc";
 
 // --- Role segmented control ---
 
@@ -207,8 +210,30 @@ function getVisibleCandidates() {
           c.name.toLowerCase().includes(q) || (c.extracted?.current_role || "").toLowerCase().includes(q)
       )
     : candidates;
-  return [...filtered].sort((a, b) => grade(b).composite - grade(a).composite);
+
+  const dir = sortDir === "asc" ? 1 : -1;
+  return [...filtered].sort((a, b) => {
+    if (sortKey === "name") return a.name.localeCompare(b.name) * dir;
+    return (grade(a).composite - grade(b).composite) * dir;
+  });
 }
+
+document.querySelectorAll("th.sortable").forEach((th) => {
+  if (th.dataset.sort === sortKey) th.classList.add("sort-active");
+  th.addEventListener("click", () => {
+    const key = th.dataset.sort;
+    if (sortKey === key) {
+      sortDir = sortDir === "asc" ? "desc" : "asc";
+    } else {
+      sortKey = key;
+      sortDir = key === "name" ? "asc" : "desc";
+    }
+    document.querySelectorAll("th.sortable").forEach((h) => h.classList.remove("sort-active", "sort-asc"));
+    th.classList.add("sort-active");
+    if (sortDir === "asc") th.classList.add("sort-asc");
+    renderTable();
+  });
+});
 
 function renderTable() {
   candidateCount.textContent = candidates.length ? `${candidates.length} scored` : "";
@@ -275,6 +300,7 @@ function renderTable() {
       </td>
       <td>${gateBadge(c.gate.status)}</td>
       <td><span class="badge ${DECISION_BADGE_CLASS[g.decision]}" title="${escapeHtml(META.decision_labels[g.decision])}">${DECISION_SHORT_LABELS[g.decision]}</span></td>
+      <td>${statusSelectHtml(c)}</td>
       <td class="muted">${c.email_sent ? "Sent" : "Draft"}</td>
       <td class="row-actions">
         <a class="row-icon-btn" href="/candidate/${c.id}" target="_blank" rel="noopener" title="Open full page" aria-label="Open full page">
@@ -300,6 +326,7 @@ function renderTable() {
     candidatesBody.appendChild(tr);
   });
   candidatesWrap.scrollLeft = 0;
+  wireStatusSelects(candidatesBody);
   animateBars();
 }
 
@@ -331,6 +358,7 @@ function renderPipeline(visible) {
               <span class="pipeline-card-score">${g.composite.toFixed(2)}</span>
               ${gateBadge(c.gate.status)}
             </div>
+            <div class="pipeline-card-status" onclick="event.stopPropagation()">${statusSelectHtml(c)}</div>
           </div>
         `;
       })
@@ -352,6 +380,7 @@ function renderPipeline(visible) {
   pipelineView.querySelectorAll(".pipeline-card").forEach((card) => {
     card.addEventListener("click", () => openDetail(card.dataset.id));
   });
+  wireStatusSelects(pipelineView);
 
   animateBars();
 }
@@ -431,6 +460,7 @@ exportBtn.addEventListener("click", () => {
 
   const header = [
     "Name",
+    "Pipeline stage",
     "PM composite",
     "PM decision",
     "Senior PM composite",
@@ -440,6 +470,7 @@ exportBtn.addEventListener("click", () => {
     "Current role",
     "Email",
     "Email sent",
+    "Notes",
   ];
   const lines = [header.map(csvEscape).join(",")];
   rows.forEach((c) => {
@@ -448,6 +479,7 @@ exportBtn.addEventListener("click", () => {
     lines.push(
       [
         c.name,
+        META.hiring_status_labels[c.hiring_status || "new"],
         pm.composite.toFixed(2),
         META.decision_labels[pm.decision],
         spm.composite.toFixed(2),
@@ -457,6 +489,7 @@ exportBtn.addEventListener("click", () => {
         c.extracted?.current_role ?? "",
         c.email ?? "",
         c.email_sent ? "yes" : "no",
+        c.notes ?? "",
       ]
         .map(csvEscape)
         .join(",")
@@ -530,6 +563,40 @@ function renderCharts() {
 function gateBadge(status) {
   if (status === "flag") return `<span class="badge badge-amber">Flag — probe</span>`;
   return `<span class="badge badge-green">Clear</span>`;
+}
+
+// --- Hiring status (manual pipeline stage, separate from the AI decision) ---
+
+function statusSelectHtml(c) {
+  const status = c.hiring_status || "new";
+  const options = META.hiring_status_order
+    .map(
+      (s) => `<option value="${s}" ${s === status ? "selected" : ""}>${escapeHtml(META.hiring_status_labels[s])}</option>`
+    )
+    .join("");
+  return `<select class="status-select badge ${HIRING_STATUS_BADGE_CLASS[status]}" data-candidate-id="${c.id}">${options}</select>`;
+}
+
+function wireStatusSelects(root) {
+  root.querySelectorAll(".status-select").forEach((select) => {
+    select.addEventListener("click", (e) => e.stopPropagation());
+    select.addEventListener("change", async (e) => {
+      e.stopPropagation();
+      const id = select.dataset.candidateId;
+      const newStatus = select.value;
+      Object.keys(HIRING_STATUS_BADGE_CLASS).forEach((s) => select.classList.remove(HIRING_STATUS_BADGE_CLASS[s]));
+      select.classList.add(HIRING_STATUS_BADGE_CLASS[newStatus]);
+      await patchCandidateLocal(id, { hiring_status: newStatus });
+    });
+  });
+}
+
+// patchCandidate() itself lives in ui.js (shared with candidate.js); this
+// wraps it to also keep the dashboard's in-memory candidates array in sync.
+async function patchCandidateLocal(id, patch) {
+  const updated = await patchCandidate(id, patch);
+  if (updated) candidates = candidates.map((c) => (c.id === updated.id ? updated : c));
+  return updated;
 }
 
 function escapeHtml(str) {
@@ -620,6 +687,24 @@ function openDetail(id) {
   detailPanel.querySelector(".close-btn").addEventListener("click", closeDetail);
   detailPanel.querySelector(".send-btn").addEventListener("click", () => sendEmail(c.id));
   detailPanel.querySelector(".detail-delete-btn").addEventListener("click", () => deleteCandidate(c.id));
+  wireStatusSelects(detailPanel);
+
+  const notesTextarea = detailPanel.querySelector("#candidate-notes");
+  const notesStatus = detailPanel.querySelector("#notes-status");
+  const notesSaveBtn = detailPanel.querySelector("#notes-save-btn");
+  notesTextarea.addEventListener("input", () => {
+    notesStatus.textContent = "Unsaved changes";
+  });
+  notesSaveBtn.addEventListener("click", async () => {
+    notesSaveBtn.disabled = true;
+    notesSaveBtn.textContent = "Saving…";
+    const updated = await patchCandidateLocal(c.id, { notes: notesTextarea.value });
+    notesSaveBtn.disabled = false;
+    notesSaveBtn.textContent = "Save notes";
+    notesStatus.textContent = updated ? "Saved" : "";
+    if (updated) setTimeout(() => (notesStatus.textContent = ""), 2000);
+  });
+
   animateBars();
 }
 
@@ -635,6 +720,11 @@ overlay.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && confirmOverlay.classList.contains("hidden") && !overlay.classList.contains("hidden")) {
     closeDetail();
+  }
+  const typing = ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName);
+  if (e.key === "/" && !typing && overlay.classList.contains("hidden")) {
+    e.preventDefault();
+    searchInput.focus();
   }
 });
 
@@ -696,12 +786,24 @@ function renderDetail(c) {
       </div>
     </div>
 
+    <div class="stat-box" style="margin-bottom: 20px;">
+      <p class="label">Pipeline stage</p>
+      ${statusSelectHtml(c)}
+    </div>
+
     <div class="gate-box ${c.gate.status === "flag" ? "flag" : "clear"}">
       <p class="label">Pillar 6 gate — structured-environment risk</p>
       <p class="gate-status" style="color: ${c.gate.status === "flag" ? "var(--amber)" : "var(--green)"}">
         ${c.gate.status === "flag" ? "Flag — probe in interview" : "Clear"}
       </p>
       <p class="muted">${escapeHtml(c.gate.rationale)}</p>
+    </div>
+
+    <p class="section-title">Notes</p>
+    <textarea id="candidate-notes" class="notes-textarea" placeholder="Private notes — referral source, follow-ups, interview feedback…">${escapeHtml(c.notes || "")}</textarea>
+    <div class="notes-footer">
+      <span class="muted" id="notes-status"></span>
+      <button class="btn-secondary btn-small" id="notes-save-btn" type="button">Save notes</button>
     </div>
 
     <p class="section-title">Pillar scores</p>

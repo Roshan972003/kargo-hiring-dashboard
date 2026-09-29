@@ -133,7 +133,7 @@
       </div>
 
       <div id="toolbar" class="toolbar hidden">
-        <input id="search-input" type="text" class="search-input" placeholder="Search by name or role…" />
+        <input id="search-input" type="text" class="search-input" placeholder="Search by name or role… (press /)" />
         <div class="toolbar-actions">
           <div class="segmented" id="view-mode-segmented">
             <button type="button" class="segmented-option active" data-mode="table" title="Table view" aria-label="Table view">
@@ -174,10 +174,11 @@
         <table id="candidates-table" class="hidden">
           <thead>
             <tr>
-              <th>Candidate</th>
-              <th>Composite</th>
+              <th class="sortable" data-sort="name">Candidate <span class="sort-arrow"></span></th>
+              <th class="sortable" data-sort="composite">Composite <span class="sort-arrow"></span></th>
               <th>Gate</th>
               <th>Decision</th>
+              <th>Status</th>
               <th>Email</th>
               <th></th>
             </tr>
