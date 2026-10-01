@@ -73,6 +73,45 @@ def _has_contact_signal(line):
     return bool(EMAIL_RE.search(line) or PHONE_RE.search(line) or LINKEDIN_RE.search(line))
 
 
+STRICT_NAME_RE = re.compile(r"[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3}")
+
+
+def _find_duplicated_name(text):
+    """
+    Last-resort, whole-document search for a specific PDF-extraction
+    artifact: some resume templates render the candidate's name twice (a
+    large caps heading plus a normal-case subtitle), and pypdf glues the
+    two together with no separator when it flattens a multi-column or
+    sidebar layout - "PRIYA SHARMAPriya Sharma" or reversed "Ravi
+    KumarRAVI KUMAR" - often dozens of lines past the top-of-resume search
+    window, because pypdf's extraction order doesn't follow visual layout
+    for these templates.
+
+    This only fires as a last resort (the line-based checks above handle
+    the normal case) and only matches when a strict title-case run (never
+    true of an all-caps header like "EDUCATION" or "CORE COMPETENCIES",
+    since those have no lowercase letters for [A-Z][a-z]+ to match) has
+    its own all-caps duplicate immediately before or after it - a
+    deliberately narrow, high-confidence signal so it doesn't start
+    picking up ordinary multi-word proper nouns from the resume body.
+    """
+    for match in STRICT_NAME_RE.finditer(text):
+        candidate = match.group(0)
+        if not _looks_like_name(candidate):
+            continue
+
+        upper_compact = candidate.upper().replace(" ", "")
+        pad = len(upper_compact) + 4
+        start, end = match.start(), match.end()
+        before = text[max(0, start - pad):start].upper().replace(" ", "").replace("\n", "")
+        after = text[end:end + pad].upper().replace(" ", "").replace("\n", "")
+
+        if upper_compact in before or upper_compact in after:
+            return candidate
+
+    return None
+
+
 def _extract_name_from_line(line):
     """
     Try the line as a whole first (the common case: the name is on its own
@@ -117,6 +156,9 @@ def redact_resume(raw_text):
         if name:
             candidate_name = name
             break
+
+    if not candidate_name:
+        candidate_name = _find_duplicated_name(raw_text)
 
     sanitized = EMAIL_RE.sub("[EMAIL]", raw_text)
     sanitized = PHONE_RE.sub("[PHONE]", sanitized)
