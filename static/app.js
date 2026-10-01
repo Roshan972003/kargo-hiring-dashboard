@@ -688,6 +688,7 @@ function openDetail(id) {
   detailPanel.querySelector(".send-btn").addEventListener("click", () => sendEmail(c.id));
   detailPanel.querySelector(".detail-delete-btn").addEventListener("click", () => deleteCandidate(c.id));
   wireStatusSelects(detailPanel);
+  wireNameEdit(detailPanel, c);
 
   const notesTextarea = detailPanel.querySelector("#candidate-notes");
   const notesStatus = detailPanel.querySelector("#notes-status");
@@ -706,6 +707,44 @@ function openDetail(id) {
   });
 
   animateBars();
+}
+
+function wireNameEdit(root, c) {
+  const display = root.querySelector("#candidate-name-display");
+  const input = root.querySelector("#candidate-name-input");
+
+  function startEdit() {
+    display.classList.add("hidden");
+    input.classList.remove("hidden");
+    input.focus();
+    input.select();
+  }
+
+  async function commitEdit() {
+    const newName = input.value.trim();
+    input.classList.add("hidden");
+    display.classList.remove("hidden");
+    if (!newName || newName === c.name) return;
+    const updated = await patchCandidateLocal(c.id, { name: newName });
+    if (updated) {
+      display.textContent = updated.name;
+      c.name = updated.name;
+      showToast("Name updated.");
+      renderTable();
+    } else {
+      input.value = c.name;
+    }
+  }
+
+  display.addEventListener("click", startEdit);
+  input.addEventListener("blur", commitEdit);
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") input.blur();
+    if (e.key === "Escape") {
+      input.value = c.name;
+      input.blur();
+    }
+  });
 }
 
 function closeDetail() {
@@ -754,7 +793,8 @@ function renderDetail(c) {
       <div class="detail-header-left">
         <span class="avatar" style="width:40px;height:40px;font-size:0.85rem">${initials(c.name)}</span>
         <div>
-          <h3>${escapeHtml(c.name)}</h3>
+          <h3 class="editable-name" id="candidate-name-display" title="Click to edit">${escapeHtml(c.name)}</h3>
+          <input type="text" id="candidate-name-input" class="name-edit-input hidden" value="${escapeHtml(c.name)}" />
           <p>Grading as ${viewRole === "PM" ? "Product Manager" : "Senior Product Manager"} · ${escapeHtml(c.file_name)}</p>
         </div>
       </div>

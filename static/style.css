@@ -923,6 +923,32 @@ tbody td {
   font-weight: 700;
 }
 
+.editable-name {
+  cursor: pointer;
+  border-radius: 6px;
+  padding: 2px 6px;
+  margin-left: -6px;
+  transition: background 0.15s;
+}
+
+.editable-name:hover {
+  background: var(--panel-2);
+}
+
+.name-edit-input {
+  margin: 0 0 3px;
+  font-size: 1.2rem;
+  font-weight: 700;
+  font-family: inherit;
+  background: var(--panel-2);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 2px 6px;
+  width: 100%;
+  max-width: 280px;
+}
+
 .detail-header p {
   margin: 0;
   color: var(--muted);

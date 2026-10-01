@@ -200,8 +200,14 @@ def patch_candidate(candidate_id):
         notes = str(payload["notes"])[:NOTES_MAX_LEN]
         patch["notes"] = notes
 
+    if "name" in payload:
+        name = str(payload["name"]).strip()[:200]
+        if not name:
+            return jsonify(error="name cannot be empty."), 400
+        patch["name"] = name
+
     if not patch:
-        return jsonify(error="Nothing to update. Send hiring_status and/or notes."), 400
+        return jsonify(error="Nothing to update. Send hiring_status, notes, and/or name."), 400
 
     updated = update_candidate(candidate_id, patch)
     if updated is None:
