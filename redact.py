@@ -36,8 +36,9 @@ SECTION_HEADER_WORDS = {
 TITLE_WORDS = {
     "manager", "associate", "engineer", "developer", "analyst", "intern",
     "director", "officer", "executive", "consultant", "specialist",
-    "coordinator", "product", "senior", "junior", "lead", "head", "vp",
-    "president", "founder", "ceo", "cto", "cpo", "coo",
+    "coordinator", "product", "senior", "junior", "lead", "leader", "head",
+    "vp", "president", "founder", "ceo", "cto", "cpo", "coo", "operations",
+    "strategist", "strategy", "brand",
 }
 
 
@@ -68,16 +69,26 @@ def _looks_like_name(line):
     return True
 
 
+def _has_contact_signal(line):
+    return bool(EMAIL_RE.search(line) or PHONE_RE.search(line) or LINKEDIN_RE.search(line))
+
+
 def _extract_name_from_line(line):
     """
     Try the line as a whole first (the common case: the name is on its own
-    line). Resumes also commonly pack "Name | email | phone | LinkedIn" or
-    leave stray icon glyphs around the name after PDF text extraction, so if
-    the whole line doesn't qualify, search it for an embedded 2-4 title-case-
-    word run instead.
+    line, or is the whole content of a "Name | email | phone" style header
+    line that still happens to pass the strict check). If that fails AND the
+    line actually carries contact info (email/phone/LinkedIn), fall back to
+    searching for an embedded 2-4 title-case-word run - this is deliberately
+    *not* applied to plain lines with no contact signal, otherwise job-title
+    or section-heading phrases elsewhere on the page ("Operations Leader",
+    "Brand Strategy") get mistaken for the name.
     """
     if NAME_LINE_RE.match(line) and _looks_like_name(line):
         return line
+
+    if not _has_contact_signal(line):
+        return None
 
     for match in NAME_RUN_RE.finditer(line):
         candidate = match.group(0).strip()
