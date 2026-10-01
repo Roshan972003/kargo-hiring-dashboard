@@ -5,6 +5,12 @@ PHONE_RE = re.compile(r"(\+?\d[\d\-\s().]{7,}\d)")
 LINKEDIN_RE = re.compile(r"(https?://)?(www\.)?linkedin\.com/\S+", re.IGNORECASE)
 NAME_LINE_RE = re.compile(r"^[A-Za-z][A-Za-z .'\-]+$")
 
+# Fallback for lines like "Priya Sharma | priya@email.com | +91 98765" or
+# resumes where PDF extraction leaves stray icon glyphs around the name -
+# finds a 2-4 title-case-word run anywhere in a line, not just a line that
+# is *only* a name.
+NAME_RUN_RE = re.compile(r"[A-Z][a-zA-Z.'\-]*(?:\s+[A-Z][a-zA-Z.'\-]*){1,3}")
+
 # Only look for the name in the top of the resume (header/contact block) -
 # a capitalized multi-word phrase deep in the body is far more likely to be
 # a project or company name than a person's name.
@@ -22,6 +28,7 @@ SECTION_HEADER_WORDS = {
     "personal", "details", "career", "work", "technical", "languages",
     "interests", "hobbies", "profile", "employment", "history",
     "activities", "extracurricular", "volunteering", "training", "courses",
+    "core", "competencies", "competency",
 }
 
 # Job-title words that show up as the first short line on resumes with an
@@ -61,6 +68,25 @@ def _looks_like_name(line):
     return True
 
 
+def _extract_name_from_line(line):
+    """
+    Try the line as a whole first (the common case: the name is on its own
+    line). Resumes also commonly pack "Name | email | phone | LinkedIn" or
+    leave stray icon glyphs around the name after PDF text extraction, so if
+    the whole line doesn't qualify, search it for an embedded 2-4 title-case-
+    word run instead.
+    """
+    if NAME_LINE_RE.match(line) and _looks_like_name(line):
+        return line
+
+    for match in NAME_RUN_RE.finditer(line):
+        candidate = match.group(0).strip()
+        if _looks_like_name(candidate):
+            return candidate
+
+    return None
+
+
 def redact_resume(raw_text):
     """
     Heuristic PII scrub so the raw resume text never reaches the scoring model.
@@ -74,14 +100,11 @@ def redact_resume(raw_text):
     lines = raw_text.split("\n")
     for line in lines[:NAME_SEARCH_LINE_LIMIT]:
         line = line.strip()
-        if (
-            line
-            and len(line) < 60
-            and not EMAIL_RE.search(line)
-            and NAME_LINE_RE.match(line)
-            and _looks_like_name(line)
-        ):
-            candidate_name = line
+        if not line or len(line) > 150:
+            continue
+        name = _extract_name_from_line(line)
+        if name:
+            candidate_name = name
             break
 
     sanitized = EMAIL_RE.sub("[EMAIL]", raw_text)
